@@ -24,6 +24,10 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('canvas-container').appendChild(renderer.domElement);
 
+// J. NEBLINA (FOG) - Adiciona neblina atmosférica
+const fog = new THREE.FogExp2(0x87ceeb, 0.015); // Cor do céu, densidade
+scene.fog = fog;
+
 // OrbitControls - para controlar a câmera com mouse
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; // Suaviza o movimento
@@ -131,16 +135,100 @@ exrLoader.load(
 // Terreno - Base (mantido para sombras e física)
 const terrainSize = 50;
 const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 128, 128); // Mais subdivisões para detalhe
+
+// F. MULTI-TEXTURA e I. NORMAL MAPPING para o terreno
+// Cria texturas proceduralmente
+const textureLoader = new THREE.TextureLoader();
+
+// Textura base (grama)
+const grassTexture = createProceduralTexture(512, 512, (x, y) => {
+    const r = Math.random() * 0.1 + 0.3;
+    const g = Math.random() * 0.1 + 0.5;
+    const b = Math.random() * 0.1 + 0.2;
+    return [r * 255, g * 255, b * 255, 255];
+});
+
+// Textura de detalhe (terra/rochas)
+const detailTexture = createProceduralTexture(512, 512, (x, y) => {
+    const noise = Math.sin(x * 10) * Math.cos(y * 10) * 0.1;
+    const r = 0.4 + noise;
+    const g = 0.3 + noise;
+    const b = 0.2 + noise;
+    return [r * 255, g * 255, b * 255, 255];
+});
+
+// Normal map procedural
+const normalMap = createNormalMap(512, 512);
+
+// E. FILTRO ANISOTRÓPICO
+grassTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+detailTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+normalMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+grassTexture.wrapS = THREE.RepeatWrapping;
+grassTexture.wrapT = THREE.RepeatWrapping;
+grassTexture.repeat.set(10, 10);
+
+detailTexture.wrapS = THREE.RepeatWrapping;
+detailTexture.wrapT = THREE.RepeatWrapping;
+detailTexture.repeat.set(20, 20);
+
+normalMap.wrapS = THREE.RepeatWrapping;
+normalMap.wrapT = THREE.RepeatWrapping;
+normalMap.repeat.set(10, 10);
+
 const terrainMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x4a7c59,
+    map: grassTexture, // Textura base
+    normalMap: normalMap, // I. NORMAL MAPPING
+    normalScale: new THREE.Vector2(0.5, 0.5),
     roughness: 0.9,
     metalness: 0.1,
-    visible: false // Invisível, apenas para física
+    visible: true // Visível agora com texturas
 });
 const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
 terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
+
+// Função para criar texturas procedurais
+function createProceduralTexture(width, height, colorFunction) {
+    const data = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const index = (y * width + x) * 4;
+            const color = colorFunction(x / width, y / height);
+            data[index] = color[0];
+            data[index + 1] = color[1];
+            data[index + 2] = color[2];
+            data[index + 3] = color[3];
+        }
+    }
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.needsUpdate = true;
+    return texture;
+}
+
+// Função para criar normal map procedural
+function createNormalMap(width, height) {
+    const data = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const index = (y * width + x) * 4;
+            // Gera um padrão de normal map
+            const nx = (Math.sin(x * 0.1) * 0.5 + 0.5) * 255;
+            const ny = (Math.cos(y * 0.1) * 0.5 + 0.5) * 255;
+            const nz = 255;
+            data[index] = nx;
+            data[index + 1] = ny;
+            data[index + 2] = nz;
+            data[index + 3] = 255;
+        }
+    }
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.needsUpdate = true;
+    return texture;
+}
 
 // Função de ruído simples para variação de terreno
 function noise2D(x, z) {
@@ -599,6 +687,142 @@ for (let i = 0; i < 12; i++) {
 }
 scene.add(decorativeStones);
 
+// A. MODELAGEM USANDO MODO IMEDIATO (glVertex style) - Criar objetos programaticamente
+// Cria uma cruz decorativa no topo da igreja usando BufferGeometry (equivalente moderno)
+function createCrossGeometry() {
+    const geometry = new THREE.BufferGeometry();
+    const vertices = [];
+    const indices = [];
+    
+    // Base vertical da cruz
+    const baseWidth = 0.2;
+    const baseHeight = 2.0;
+    const baseDepth = 0.1;
+    
+    // Vértices da base (8 vértices de um cubo)
+    const baseVerts = [
+        // Frente
+        [-baseWidth/2, 0, baseDepth/2],
+        [baseWidth/2, 0, baseDepth/2],
+        [baseWidth/2, baseHeight, baseDepth/2],
+        [-baseWidth/2, baseHeight, baseDepth/2],
+        // Trás
+        [-baseWidth/2, 0, -baseDepth/2],
+        [baseWidth/2, 0, -baseDepth/2],
+        [baseWidth/2, baseHeight, -baseDepth/2],
+        [-baseWidth/2, baseHeight, -baseDepth/2]
+    ];
+    
+    // Braço horizontal da cruz
+    const armWidth = 1.5;
+    const armHeight = 0.2;
+    const armDepth = 0.1;
+    const armY = baseHeight * 0.7;
+    
+    const armVerts = [
+        // Frente
+        [-armWidth/2, armY - armHeight/2, armDepth/2],
+        [armWidth/2, armY - armHeight/2, armDepth/2],
+        [armWidth/2, armY + armHeight/2, armDepth/2],
+        [-armWidth/2, armY + armHeight/2, armDepth/2],
+        // Trás
+        [-armWidth/2, armY - armHeight/2, -armDepth/2],
+        [armWidth/2, armY - armHeight/2, -armDepth/2],
+        [armWidth/2, armY + armHeight/2, -armDepth/2],
+        [-armWidth/2, armY + armHeight/2, -armDepth/2]
+    ];
+    
+    // Adiciona vértices
+    let vertexIndex = 0;
+    
+    // Função para adicionar cubo
+    function addCube(verts, startIndex) {
+        const indices = [
+            // Frente
+            startIndex, startIndex + 1, startIndex + 2,
+            startIndex, startIndex + 2, startIndex + 3,
+            // Trás
+            startIndex + 4, startIndex + 6, startIndex + 5,
+            startIndex + 4, startIndex + 7, startIndex + 6,
+            // Topo
+            startIndex + 3, startIndex + 2, startIndex + 6,
+            startIndex + 3, startIndex + 6, startIndex + 7,
+            // Base
+            startIndex, startIndex + 5, startIndex + 1,
+            startIndex, startIndex + 4, startIndex + 5,
+            // Direita
+            startIndex + 1, startIndex + 5, startIndex + 6,
+            startIndex + 1, startIndex + 6, startIndex + 2,
+            // Esquerda
+            startIndex, startIndex + 3, startIndex + 7,
+            startIndex, startIndex + 7, startIndex + 4
+        ];
+        return indices;
+    }
+    
+    // Adiciona base
+    baseVerts.forEach(v => vertices.push(...v));
+    indices.push(...addCube(baseVerts, vertexIndex));
+    vertexIndex += 8;
+    
+    // Adiciona braço
+    armVerts.forEach(v => vertices.push(...v));
+    indices.push(...addCube(armVerts, vertexIndex));
+    
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    
+    return geometry;
+}
+
+// Cria cruz decorativa
+const crossGeometry = createCrossGeometry();
+const crossMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffd700, // Dourado
+    metalness: 0.8,
+    roughness: 0.2,
+    emissive: 0x332200,
+    emissiveIntensity: 0.2
+});
+const cross = new THREE.Mesh(crossGeometry, crossMaterial);
+cross.position.set(0, 8, 0); // Posiciona acima da igreja
+cross.castShadow = true;
+scene.add(cross);
+
+// K. TRANSPARÊNCIA (BLENDING) - Adiciona objetos transparentes
+// Cria vitrais transparentes (janelas da igreja)
+function createStainedGlassWindow() {
+    const geometry = new THREE.PlaneGeometry(1, 2);
+    const material = new THREE.MeshPhysicalMaterial({
+        color: 0x4a90e2,
+        transparent: true,
+        opacity: 0.6,
+        transmission: 0.9, // Transmissão de luz
+        roughness: 0.1,
+        metalness: 0.0,
+        side: THREE.DoubleSide
+    });
+    const window = new THREE.Mesh(geometry, material);
+    return window;
+}
+
+// Adiciona alguns vitrais decorativos
+const stainedGlassGroup = new THREE.Group();
+for (let i = 0; i < 6; i++) {
+    const window = createStainedGlassWindow();
+    const angle = (i / 6) * Math.PI * 2;
+    const radius = 6;
+    window.position.set(
+        Math.cos(angle) * radius,
+        3,
+        Math.sin(angle) * radius
+    );
+    window.lookAt(0, 3, 0);
+    stainedGlassGroup.add(window);
+}
+scene.add(stainedGlassGroup);
+
 // Árvores simples ao redor da igreja
 const treesGroup = new THREE.Group();
 
@@ -977,6 +1201,37 @@ function initGUI() {
     
     sceneFolder.add(gridHelper, 'visible').name('Mostrar Grid');
     sceneFolder.add(axesHelper, 'visible').name('Mostrar Eixos');
+    
+    // Controles de Neblina (Fog)
+    const fogFolder = gui.addFolder('Neblina (Fog)');
+    const fogConfig = {
+        enabled: true,
+        density: fog.density,
+        color: '#87ceeb'
+    };
+    fogFolder.add(fogConfig, 'enabled').name('Ativado').onChange((value) => {
+        scene.fog = value ? fog : null;
+    });
+    fogFolder.add(fogConfig, 'density', 0, 0.1, 0.001).name('Densidade').onChange((value) => {
+        fog.density = value;
+    });
+    fogFolder.addColor(fogConfig, 'color').name('Cor').onChange((value) => {
+        fog.color.setHex(value);
+    });
+    
+    // Controles de Objetos Programáticos
+    const proceduralFolder = gui.addFolder('Objetos Programáticos');
+    proceduralFolder.add(cross, 'visible').name('Cruz Decorativa');
+    proceduralFolder.add(stainedGlassGroup, 'visible').name('Vitrais');
+    
+    // Controles de Texturas
+    const textureFolder = gui.addFolder('Texturas do Terreno');
+    textureFolder.add(terrainMaterial.normalScale, 'x', 0, 2, 0.1).name('Normal Scale X');
+    textureFolder.add(terrainMaterial.normalScale, 'y', 0, 2, 0.1).name('Normal Scale Y');
+    if (grassTexture) {
+        textureFolder.add(grassTexture.repeat, 'x', 1, 20, 1).name('Repetição Textura X');
+        textureFolder.add(grassTexture.repeat, 'y', 1, 20, 1).name('Repetição Textura Y');
+    }
     
     // Função para resetar câmera
     sceneFolder.add({
