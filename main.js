@@ -216,8 +216,17 @@ function initGUI() {
     modelFolder.open();
     
     // Controles das Luzes
+    const lightsFolder = gui.addFolder('Luzes');
+    lightsFolder.add({
+        mostrarTodosHelpers: true
+    }, 'mostrarTodosHelpers').name('Mostrar Todos Helpers').onChange((value) => {
+        lightHelpers.forEach(helper => {
+            helper.visible = value;
+        });
+    });
+    
     lights.forEach((lightData, index) => {
-        const lightFolder = gui.addFolder(lightData.name);
+        const lightFolder = lightsFolder.addFolder(lightData.name);
         const lightPos = {
             x: lightData.light.position.x,
             y: lightData.light.position.y,
@@ -236,9 +245,15 @@ function initGUI() {
         lightFolder.add(lightData.light, 'intensity', 0, 2, 0.1).name('Intensidade');
         lightFolder.addColor(lightData, 'color').name('Cor').onChange((value) => {
             lightData.light.color.setHex(value);
+            // Atualiza a cor do helper também
+            if (lightHelpers[index]) {
+                lightHelpers[index].color.setHex(value);
+            }
         });
         lightFolder.add(lightData.light, 'distance', 0, 200, 5).name('Distância');
         lightFolder.add(lightData.light, 'decay', 1, 2, 0.1).name('Decaimento');
+        lightFolder.add(lightData.light, 'visible').name('Visível');
+        lightFolder.add(lightHelpers[index], 'visible').name('Mostrar Helper');
         
         if (index === 0) lightFolder.open();
     });
@@ -271,9 +286,20 @@ function initGUI() {
         ambientLight.color.setHex(value);
     });
     
+    // Controles do Chão
+    const floorFolder = gui.addFolder('Chão');
+    const floorColor = { cor: 0x90ee90 };
+    floorFolder.addColor(floorColor, 'cor').name('Cor').onChange((value) => {
+        floorMaterial.color.setHex(value);
+    });
+    floorFolder.add(floorMaterial, 'roughness', 0, 1, 0.1).name('Rugosidade');
+    floorFolder.add(floorMaterial, 'metalness', 0, 1, 0.1).name('Metalicidade');
+    floorFolder.add(floor, 'visible').name('Visível');
+    
     // Controles da Cena
     const sceneFolder = gui.addFolder('Cena');
-    sceneFolder.addColor({ cor: 0x87ceeb }, 'cor').name('Cor de Fundo').onChange((value) => {
+    const bgColor = { cor: 0x87ceeb };
+    sceneFolder.addColor(bgColor, 'cor').name('Cor de Fundo').onChange((value) => {
         scene.background = new THREE.Color(value);
     });
     sceneFolder.add(gridHelper, 'visible').name('Mostrar Grid');
@@ -282,24 +308,49 @@ function initGUI() {
     // Função para resetar câmera
     sceneFolder.add({
         resetCamera: () => {
-            const maxDim = Math.max(
-                model ? new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).x : 10,
-                model ? new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).y : 10,
-                model ? new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).z : 10
-            );
-            const fov = camera.fov * (Math.PI / 180);
-            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-            cameraZ *= 1.5;
-            camera.position.set(cameraZ, cameraZ * 0.5, cameraZ);
-            camera.lookAt(0, 0, 0);
-            controls.target.set(0, 0, 0);
-            controls.update();
-            guiConfig.camera.x = camera.position.x;
-            guiConfig.camera.y = camera.position.y;
-            guiConfig.camera.z = camera.position.z;
-            cameraFolder.updateDisplay();
+            if (model) {
+                const box = new THREE.Box3().setFromObject(model);
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const fov = camera.fov * (Math.PI / 180);
+                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+                cameraZ *= 1.5;
+                camera.position.set(cameraZ, cameraZ * 0.5, cameraZ);
+                camera.lookAt(0, 0, 0);
+                controls.target.set(0, 0, 0);
+                controls.update();
+                guiConfig.camera.x = camera.position.x;
+                guiConfig.camera.y = camera.position.y;
+                guiConfig.camera.z = camera.position.z;
+                cameraFolder.updateDisplay();
+            }
         }
     }, 'resetCamera').name('Resetar Câmera');
+    
+    // Função para resetar modelo
+    sceneFolder.add({
+        resetModel: () => {
+            if (model) {
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                model.position.x = -center.x;
+                model.position.y = -center.y;
+                model.position.z = -center.z;
+                model.rotation.set(0, 0, 0);
+                model.scale.set(1, 1, 1);
+                modelPosition.x = model.position.x;
+                modelPosition.y = model.position.y;
+                modelPosition.z = model.position.z;
+                modelRotation.x = 0;
+                modelRotation.y = 0;
+                modelRotation.z = 0;
+                modelScale.x = 1;
+                modelScale.y = 1;
+                modelScale.z = 1;
+                modelFolder.updateDisplay();
+            }
+        }
+    }, 'resetModel').name('Resetar Modelo');
 }
 
 // Animação
