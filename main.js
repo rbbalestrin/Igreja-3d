@@ -578,19 +578,7 @@ terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
 
-// Chão visível embaixo da grama
-const floorSize = 200;
-const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize, 32, 32);
-const floorMaterial = new THREE.MeshStandardMaterial({
-    color: 0x3a6b4a, // Verde mais escuro que a grama
-    roughness: 0.9,
-    metalness: 0.1
-});
-const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = -0.1; // Ligeiramente abaixo da grama
-floor.receiveShadow = true;
-scene.add(floor);
+// Chão fixo removido - substituído por InfiniteTerrain
 
 // Função de ruído simples para variação de terreno
 function noise2D(x, z) {
@@ -658,13 +646,27 @@ for (let i = 0; i < vertices.count; i++) {
 
 terrainGeometry.computeVertexNormals();
 
-// Função para obter altura do terreno em uma posição (x, z)
+// Função para obter altura do terreno em uma posição (x, z) - INFINITA
 function getTerrainHeight(x, z) {
     const distanceFromCenter = Math.sqrt(x * x + z * z);
     const flatZoneRadius = 8;
     const maxHeight = 2.0;
     
-    const heightFactor = Math.max(0, Math.min(1, (distanceFromCenter - flatZoneRadius) / (terrainSize / 2 - flatZoneRadius)));
+    // Remove dependência de terrainSize - funciona para qualquer coordenada
+    // Zona plana no centro, transição suave para terreno variado
+    const transitionStart = flatZoneRadius;
+    const transitionEnd = flatZoneRadius + 20; // Zona de transição de 20 unidades
+    
+    let heightFactor = 0;
+    if (distanceFromCenter < transitionStart) {
+        heightFactor = 0; // Zona plana no centro
+    } else if (distanceFromCenter < transitionEnd) {
+        // Transição suave
+        heightFactor = (distanceFromCenter - transitionStart) / (transitionEnd - transitionStart);
+    } else {
+        heightFactor = 1.0; // Terreno variado completo
+    }
+    
     const noiseValue = fractalNoise(x, z, 4);
     const height = noiseValue * maxHeight * heightFactor;
     
@@ -989,6 +991,135 @@ class InfiniteGrass {
 
 // Aumenta a área de grama para cobrir mais espaço e adiciona mais blades
 const infiniteGrass = new InfiniteGrass(100000, 100);
+
+// ============================================
+// TÉCNICA: Terreno Infinito Procedural
+// Sistema de tiles que se reposicionam conforme a câmera se move
+// ============================================
+
+class InfiniteTerrain {
+    constructor(tileSize = 100, gridSize = 3) {
+        this.tileSize = tileSize;
+        this.gridSize = gridSize; // Grid 3x3 = 9 tiles visíveis
+        this.tiles = [];
+        this.tileGroup = new THREE.Group();
+        this.currentTileX = 0;
+        this.currentTileZ = 0;
+        
+        scene.add(this.tileGroup);
+        this.init();
+    }
+    
+    init() {
+        // Cria grid inicial de tiles ao redor da origem
+        const halfGrid = Math.floor(this.gridSize / 2);
+        for (let x = -halfGrid; x <= halfGrid; x++) {
+            for (let z = -halfGrid; z <= halfGrid; z++) {
+                this.createTile(x * this.tileSize, z * this.tileSize);
+            }
+        }
+    }
+    
+    createTile(centerX, centerZ) {
+        const segments = 32; // Subdivisões para detalhe
+        const geometry = new THREE.PlaneGeometry(
+            this.tileSize,
+            this.tileSize,
+            segments,
+            segments
+        );
+        
+        // Deforma os vértices usando getTerrainHeight
+        const vertices = geometry.attributes.position;
+        for (let i = 0; i < vertices.count; i++) {
+            const x = vertices.getX(i) + centerX;
+            const z = vertices.getZ(i) + centerZ;
+            const height = getTerrainHeight(x, z);
+            vertices.setY(i, height);
+        }
+        
+        geometry.computeVertexNormals();
+        
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x3a6b4a, // Verde escuro (chão)
+            roughness: 0.9,
+            metalness: 0.1
+        });
+        
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(centerX, 0, centerZ);
+        mesh.receiveShadow = true;
+        
+        this.tileGroup.add(mesh);
+        this.tiles.push({
+            mesh: mesh,
+            centerX: centerX,
+            centerZ: centerZ,
+            tileX: Math.floor(centerX / this.tileSize),
+            tileZ: Math.floor(centerZ / this.tileSize)
+        });
+    }
+    
+    update(cameraPos) {
+        // Calcula qual tile a câmera está
+        const cameraTileX = Math.floor(cameraPos.x / this.tileSize);
+        const cameraTileZ = Math.floor(cameraPos.z / this.tileSize);
+        
+        // Se a câmera mudou de tile, reposiciona os tiles
+        if (cameraTileX !== this.currentTileX || cameraTileZ !== this.currentTileZ) {
+            this.currentTileX = cameraTileX;
+            this.currentTileZ = cameraTileZ;
+            
+            // Remove tiles que estão muito longe
+            const halfGrid = Math.floor(this.gridSize / 2);
+            const minTileX = cameraTileX - halfGrid;
+            const maxTileX = cameraTileX + halfGrid;
+            const minTileZ = cameraTileZ - halfGrid;
+            const maxTileZ = cameraTileZ + halfGrid;
+            
+            // Filtra tiles que ainda estão no range
+            const tilesToKeep = [];
+            const tilesToRemove = [];
+            
+            this.tiles.forEach(tile => {
+                if (tile.tileX >= minTileX && tile.tileX <= maxTileX &&
+                    tile.tileZ >= minTileZ && tile.tileZ <= maxTileZ) {
+                    tilesToKeep.push(tile);
+                } else {
+                    tilesToRemove.push(tile);
+                }
+            });
+            
+            // Remove tiles antigos
+            tilesToRemove.forEach(tile => {
+                this.tileGroup.remove(tile.mesh);
+                tile.mesh.geometry.dispose();
+                tile.mesh.material.dispose();
+            });
+            
+            this.tiles = tilesToKeep;
+            
+            // Cria novos tiles que estão faltando
+            const existingTiles = new Set();
+            this.tiles.forEach(tile => {
+                existingTiles.add(`${tile.tileX},${tile.tileZ}`);
+            });
+            
+            for (let x = minTileX; x <= maxTileX; x++) {
+                for (let z = minTileZ; z <= maxTileZ; z++) {
+                    const key = `${x},${z}`;
+                    if (!existingTiles.has(key)) {
+                        this.createTile(x * this.tileSize, z * this.tileSize);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Cria o terreno infinito
+const infiniteTerrain = new InfiniteTerrain(100, 3);
 
 // Caminho de pedras em frente à igreja
 const pathGroup = new THREE.Group();
@@ -1537,6 +1668,11 @@ function animate() {
     // Atualiza a grama infinita
     if (infiniteGrass) {
         infiniteGrass.update(time, camera.position);
+    }
+    
+    // Atualiza o terreno infinito
+    if (infiniteTerrain) {
+        infiniteTerrain.update(camera.position);
     }
     
     // Atualiza transição automática dia/noite
