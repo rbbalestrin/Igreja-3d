@@ -268,21 +268,29 @@ const exrLoader = new EXRLoader();
 exrLoader.load(
     '/assets/skyboxes/qwantani_sunset_puresky_1k.exr',
     (texture) => {
+        console.log('[DIA/NOITE] Skybox dia carregado com sucesso');
         texture.mapping = THREE.EquirectangularReflectionMapping;
         texture.colorSpace = THREE.LinearSRGBColorSpace;
         texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
         dayTexture = texture;
         
+        console.log('[DIA/NOITE] dayTexture definida:', !!dayTexture);
+        console.log('[DIA/NOITE] nightTexture atual:', !!nightTexture);
+        
         // Se ainda não temos a textura da noite, usa a do dia
         if (!nightTexture) {
+            console.log('[DIA/NOITE] Atualizando skybox apenas com textura do dia');
+            updateSkybox();
+        } else {
+            console.log('[DIA/NOITE] Ambas texturas carregadas, atualizando skybox');
             updateSkybox();
         }
-        
-        console.log('Skybox Dia carregado!');
     },
-    undefined,
+    (progress) => {
+        console.log('[DIA/NOITE] Carregando skybox dia...', progress);
+    },
     (error) => {
-        console.error('Erro ao carregar skybox dia:', error);
+        console.error('[DIA/NOITE] Erro ao carregar skybox dia:', error);
     }
 );
 
@@ -291,60 +299,104 @@ const nightSkyboxLoader = new GLTFLoader();
 nightSkyboxLoader.load(
     '/assets/inside_galaxy_skybox_hdri_360_panorama/scene.gltf',
     (gltf) => {
+        console.log('[DIA/NOITE] Modelo GLTF da noite carregado');
+        let textureFound = false;
+        
         // Extrai a textura do modelo
         gltf.scene.traverse((child) => {
             if (child.isMesh && child.material) {
+                console.log('[DIA/NOITE] Mesh encontrado, material:', child.material.type);
+                
+                // Tenta encontrar textura em diferentes propriedades
+                let texture = null;
                 if (child.material.map) {
-                    const texture = child.material.map.clone();
-                    texture.mapping = THREE.EquirectangularReflectionMapping;
-                    texture.colorSpace = THREE.LinearSRGBColorSpace;
-                    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                    nightTexture = texture;
-                    
-                    updateSkybox();
-                    console.log('Skybox Noite carregado!');
+                    texture = child.material.map;
+                    console.log('[DIA/NOITE] Textura encontrada em .map');
+                } else if (child.material.emissiveMap) {
+                    texture = child.material.emissiveMap;
+                    console.log('[DIA/NOITE] Textura encontrada em .emissiveMap');
+                } else if (Array.isArray(child.material)) {
+                    child.material.forEach((mat, idx) => {
+                        if (mat.map) {
+                            texture = mat.map;
+                            console.log(`[DIA/NOITE] Textura encontrada em material[${idx}].map`);
+                        }
+                    });
+                }
+                
+                if (texture) {
+                    const clonedTexture = texture.clone();
+                    clonedTexture.mapping = THREE.EquirectangularReflectionMapping;
+                    clonedTexture.colorSpace = THREE.LinearSRGBColorSpace;
+                    clonedTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                    nightTexture = clonedTexture;
+                    textureFound = true;
+                    console.log('[DIA/NOITE] Skybox noite configurado com textura do modelo');
                 }
             }
         });
-    },
-    undefined,
-    (error) => {
-        console.error('Erro ao carregar skybox noite:', error);
-        // Se falhar, cria uma textura procedural escura
-        const canvas = document.createElement('canvas');
-        canvas.width = 1024;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        gradient.addColorStop(0, '#000011');
-        gradient.addColorStop(0.5, '#000033');
-        gradient.addColorStop(1, '#000000');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // Adiciona estrelas
-        for (let i = 0; i < 500; i++) {
-            const x = Math.random() * canvas.width;
-            const y = Math.random() * canvas.height;
-            const size = Math.random() * 2;
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(x, y, size, 0, Math.PI * 2);
-            ctx.fill();
+        if (!textureFound) {
+            console.warn('[DIA/NOITE] Nenhuma textura encontrada no modelo, criando textura procedural');
+            createProceduralNightTexture();
         }
         
-        nightTexture = new THREE.CanvasTexture(canvas);
-        nightTexture.mapping = THREE.EquirectangularReflectionMapping;
-        nightTexture.colorSpace = THREE.LinearSRGBColorSpace;
+        console.log('[DIA/NOITE] dayTexture:', !!dayTexture, 'nightTexture:', !!nightTexture);
         updateSkybox();
+    },
+    (progress) => {
+        console.log('[DIA/NOITE] Carregando skybox noite...', progress);
+    },
+    (error) => {
+        console.error('[DIA/NOITE] Erro ao carregar skybox noite:', error);
+        console.log('[DIA/NOITE] Criando textura procedural como fallback');
+        createProceduralNightTexture();
     }
 );
 
+// Função auxiliar para criar textura procedural da noite
+function createProceduralNightTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#000011');
+    gradient.addColorStop(0.5, '#000033');
+    gradient.addColorStop(1, '#000000');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Adiciona estrelas
+    for (let i = 0; i < 500; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const size = Math.random() * 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    nightTexture = new THREE.CanvasTexture(canvas);
+    nightTexture.mapping = THREE.EquirectangularReflectionMapping;
+    nightTexture.colorSpace = THREE.LinearSRGBColorSpace;
+    console.log('[DIA/NOITE] Textura procedural da noite criada');
+    updateSkybox();
+}
+
 // Função para atualizar o skybox com blend entre dia e noite
 function updateSkybox() {
-    if (!dayTexture && !nightTexture) return;
+    console.log('[DIA/NOITE] updateSkybox() chamado');
+    console.log('[DIA/NOITE] dayTexture:', !!dayTexture, 'nightTexture:', !!nightTexture, 'blend:', dayNightBlend);
+    
+    if (!dayTexture && !nightTexture) {
+        console.warn('[DIA/NOITE] Nenhuma textura disponível!');
+        return;
+    }
     
     if (dayTexture && nightTexture) {
+        console.log('[DIA/NOITE] Criando material com blend entre dia e noite');
         // Usa shader customizado para blend entre as duas texturas
         const blendMaterial = new THREE.ShaderMaterial({
             uniforms: {
@@ -385,16 +437,20 @@ function updateSkybox() {
             fog: false
         });
         skybox.material = blendMaterial;
+        console.log('[DIA/NOITE] Material de blend aplicado ao skybox');
         
         // Atualiza environment map (interpola entre os dois)
         if (dayNightBlend < 0.5) {
             scene.environment = dayTexture;
             scene.background = dayTexture;
+            console.log('[DIA/NOITE] Usando environment map do dia');
         } else {
             scene.environment = nightTexture;
             scene.background = nightTexture;
+            console.log('[DIA/NOITE] Usando environment map da noite');
         }
     } else if (dayTexture) {
+        console.log('[DIA/NOITE] Usando apenas textura do dia');
         skyMaterial = new THREE.MeshBasicMaterial({
             map: dayTexture,
             side: THREE.BackSide,
@@ -404,6 +460,7 @@ function updateSkybox() {
         scene.environment = dayTexture;
         scene.background = dayTexture;
     } else if (nightTexture) {
+        console.log('[DIA/NOITE] Usando apenas textura da noite');
         skyMaterial = new THREE.MeshBasicMaterial({
             map: nightTexture,
             side: THREE.BackSide,
@@ -417,12 +474,31 @@ function updateSkybox() {
 
 // Função para transicionar entre dia e noite
 function transitionDayNight(targetMode, duration = null) {
-    if (isTransitioning) return;
+    console.log('[DIA/NOITE] transitionDayNight() chamado:', targetMode);
+    console.log('[DIA/NOITE] isTransitioning:', isTransitioning);
+    console.log('[DIA/NOITE] dayTexture:', !!dayTexture, 'nightTexture:', !!nightTexture);
+    
+    if (isTransitioning) {
+        console.warn('[DIA/NOITE] Transição já em andamento, ignorando');
+        return;
+    }
+    
+    if (!dayTexture && !nightTexture) {
+        console.error('[DIA/NOITE] Nenhuma textura disponível para transição!');
+        return;
+    }
     
     const targetBlend = targetMode === 'night' ? 1.0 : 0.0;
     const transitionDuration = duration || dayNightConfig.transitionTime;
     const startBlend = dayNightBlend;
     const startTime = performance.now() * 0.001;
+    
+    console.log('[DIA/NOITE] Iniciando transição:', {
+        targetMode,
+        targetBlend,
+        startBlend,
+        transitionDuration
+    });
     
     isTransitioning = true;
     
@@ -439,8 +515,12 @@ function transitionDayNight(targetMode, duration = null) {
         dayNightBlend = startBlend + (targetBlend - startBlend) * eased;
         
         // Atualiza o skybox
-        if (skybox.material.uniforms) {
+        if (skybox.material && skybox.material.uniforms) {
             skybox.material.uniforms.blend.value = dayNightBlend;
+        } else {
+            // Se não tem uniforms, precisa recriar o material
+            console.log('[DIA/NOITE] Material não tem uniforms, recriando skybox');
+            updateSkybox();
         }
         
         // Atualiza fog e ambiente
@@ -449,6 +529,7 @@ function transitionDayNight(targetMode, duration = null) {
         if (progress < 1.0) {
             requestAnimationFrame(animateTransition);
         } else {
+            console.log('[DIA/NOITE] Transição concluída para', targetMode);
             isTransitioning = false;
             dayNightConfig.mode = targetMode;
         }
@@ -496,6 +577,20 @@ const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
 terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
+
+// Chão visível embaixo da grama
+const floorSize = 200;
+const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize, 32, 32);
+const floorMaterial = new THREE.MeshStandardMaterial({
+    color: 0x3a6b4a, // Verde mais escuro que a grama
+    roughness: 0.9,
+    metalness: 0.1
+});
+const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -0.1; // Ligeiramente abaixo da grama
+floor.receiveShadow = true;
+scene.add(floor);
 
 // Função de ruído simples para variação de terreno
 function noise2D(x, z) {
@@ -1446,11 +1541,17 @@ function animate() {
     
     // Atualiza transição automática dia/noite
     if (dayNightConfig.autoTransition && !isTransitioning) {
-        dayNightBlend = (Math.sin(time * dayNightConfig.autoTransitionSpeed) + 1) / 2;
-        if (skybox.material.uniforms) {
-            skybox.material.uniforms.blend.value = dayNightBlend;
+        const newBlend = (Math.sin(time * dayNightConfig.autoTransitionSpeed) + 1) / 2;
+        if (Math.abs(newBlend - dayNightBlend) > 0.01) { // Só atualiza se mudou significativamente
+            dayNightBlend = newBlend;
+            if (skybox.material && skybox.material.uniforms) {
+                skybox.material.uniforms.blend.value = dayNightBlend;
+            } else {
+                // Se não tem uniforms, recria o material
+                updateSkybox();
+            }
+            updateEnvironmentForDayNight();
         }
-        updateEnvironmentForDayNight();
     }
     
     // Renderiza a cena
