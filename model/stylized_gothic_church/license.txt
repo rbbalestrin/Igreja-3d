@@ -1,0 +1,11 @@
+Model Information:
+* title:	Stylized Gothic Church
+* source:	https://sketchfab.com/3d-models/stylized-gothic-church-8b6f403ad96e4f84806b9c333d888251
+* author:	Daan van Leeuwen (https://sketchfab.com/superwortel)
+
+Model License:
+* license type:	CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)
+* requirements:	Author must be credited. No commercial use.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Stylized Gothic Church" (https://sketchfab.com/3d-models/stylized-gothic-church-8b6f403ad96e4f84806b9c333d888251) by Daan van Leeuwen (https://sketchfab.com/superwortel) licensed under CC-BY-NC-4.0 (http://creativecommons.org/licenses/by-nc/4.0/)

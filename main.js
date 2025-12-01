@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Cena
 const scene = new THREE.Scene();
@@ -52,31 +53,69 @@ floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
 
-// Cubo de exemplo
-const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
-const cubeMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0xff6b6b,
-    roughness: 0.5,
-    metalness: 0.5
-});
-const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-cube.position.set(0, 0.5, 0);
-cube.castShadow = true;
-cube.receiveShadow = true;
-scene.add(cube);
+// Variável para armazenar o modelo
+let model = null;
 
-// Esfera de exemplo
-const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-const sphereMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0x4ecdc4,
-    roughness: 0.3,
-    metalness: 0.7
-});
-const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-sphere.position.set(2, 0.5, 0);
-sphere.castShadow = true;
-sphere.receiveShadow = true;
-scene.add(sphere);
+// Loader para modelos GLTF
+const loader = new GLTFLoader();
+
+// Elemento de loading
+const loadingElement = document.getElementById('loading');
+
+// Carrega o modelo
+loadingElement.classList.add('show');
+loader.load(
+    '/model/stylized_gothic_church/scene.gltf',
+    (gltf) => {
+        model = gltf.scene;
+        
+        // Habilita sombras no modelo
+        model.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        
+        // Calcula o bounding box para centralizar o modelo
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        
+        // Centraliza o modelo
+        model.position.x = -center.x;
+        model.position.y = -center.y;
+        model.position.z = -center.z;
+        
+        // Ajusta a câmera para focar no modelo
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+        cameraZ *= 1.5; // Adiciona um pouco de espaço
+        
+        camera.position.set(cameraZ, cameraZ * 0.5, cameraZ);
+        camera.lookAt(0, 0, 0);
+        controls.target.set(0, 0, 0);
+        controls.update();
+        
+        // Adiciona o modelo à cena
+        scene.add(model);
+        
+        // Esconde o loading
+        loadingElement.classList.remove('show');
+        
+        console.log('Modelo carregado com sucesso!');
+    },
+    (progress) => {
+        const percent = (progress.loaded / progress.total * 100).toFixed(0);
+        loadingElement.textContent = `Carregando modelo... ${percent}%`;
+        console.log('Carregando modelo...', percent + '%');
+    },
+    (error) => {
+        loadingElement.textContent = 'Erro ao carregar modelo!';
+        console.error('Erro ao carregar modelo:', error);
+    }
+);
 
 // Grid helper
 const gridHelper = new THREE.GridHelper(20, 20, 0x888888, 0xcccccc);
@@ -89,10 +128,6 @@ scene.add(axesHelper);
 // Animação
 function animate() {
     requestAnimationFrame(animate);
-    
-    // Rotaciona os objetos
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.01;
     
     // Atualiza os controles
     controls.update();

@@ -32,6 +32,24 @@
             font-size: 14px;
             z-index: 100;
         }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 18px;
+            z-index: 200;
+            display: none;
+        }
+        
+        #loading.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -39,6 +57,7 @@
     <div id="info">
         <p>Use o mouse para rotacionar, arrastar e dar zoom</p>
     </div>
+    <div id="loading">Carregando modelo...</div>
     <script type="module" src="/main.js"></script>
 </body>
 </html>
