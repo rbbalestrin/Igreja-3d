@@ -7,6 +7,9 @@ import GUI from 'lil-gui';
 // Cena
 const scene = new THREE.Scene();
 
+// Fog - Neblina para adicionar atmosfera
+scene.fog = new THREE.FogExp2(0x87ceeb, 0.015); // Cor azul claro, densidade baixa
+
 // Câmera
 const camera = new THREE.PerspectiveCamera(
     75, // Campo de visão
@@ -23,10 +26,6 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('canvas-container').appendChild(renderer.domElement);
-
-// J. NEBLINA (FOG) - Adiciona neblina atmosférica
-const fog = new THREE.FogExp2(0x87ceeb, 0.015); // Cor do céu, densidade
-scene.fog = fog;
 
 // OrbitControls - para controlar a câmera com mouse
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -109,6 +108,9 @@ exrLoader.load(
         texture.mapping = THREE.EquirectangularReflectionMapping;
         texture.colorSpace = THREE.LinearSRGBColorSpace;
         
+        // Filtro Anisotrópico - melhora qualidade das texturas em ângulos
+        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        
         // Atualiza o material do skybox com a textura
         skyMaterial = new THREE.MeshBasicMaterial({
             map: texture,
@@ -135,100 +137,244 @@ exrLoader.load(
 // Terreno - Base (mantido para sombras e física)
 const terrainSize = 50;
 const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 128, 128); // Mais subdivisões para detalhe
-
-// F. MULTI-TEXTURA e I. NORMAL MAPPING para o terreno
-// Cria texturas proceduralmente
-const textureLoader = new THREE.TextureLoader();
-
-// Textura base (grama)
-const grassTexture = createProceduralTexture(512, 512, (x, y) => {
-    const r = Math.random() * 0.1 + 0.3;
-    const g = Math.random() * 0.1 + 0.5;
-    const b = Math.random() * 0.1 + 0.2;
-    return [r * 255, g * 255, b * 255, 255];
-});
-
-// Textura de detalhe (terra/rochas)
-const detailTexture = createProceduralTexture(512, 512, (x, y) => {
-    const noise = Math.sin(x * 10) * Math.cos(y * 10) * 0.1;
-    const r = 0.4 + noise;
-    const g = 0.3 + noise;
-    const b = 0.2 + noise;
-    return [r * 255, g * 255, b * 255, 255];
-});
-
-// Normal map procedural
-const normalMap = createNormalMap(512, 512);
-
-// E. FILTRO ANISOTRÓPICO
-grassTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-detailTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-normalMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
-
-grassTexture.wrapS = THREE.RepeatWrapping;
-grassTexture.wrapT = THREE.RepeatWrapping;
-grassTexture.repeat.set(10, 10);
-
-detailTexture.wrapS = THREE.RepeatWrapping;
-detailTexture.wrapT = THREE.RepeatWrapping;
-detailTexture.repeat.set(20, 20);
-
-normalMap.wrapS = THREE.RepeatWrapping;
-normalMap.wrapT = THREE.RepeatWrapping;
-normalMap.repeat.set(10, 10);
-
 const terrainMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x4a7c59,
-    map: grassTexture, // Textura base
-    normalMap: normalMap, // I. NORMAL MAPPING
-    normalScale: new THREE.Vector2(0.5, 0.5),
     roughness: 0.9,
     metalness: 0.1,
-    visible: true // Visível agora com texturas
+    visible: false // Invisível, apenas para física
 });
 const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
 terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
 
-// Função para criar texturas procedurais
-function createProceduralTexture(width, height, colorFunction) {
-    const data = new Uint8Array(width * height * 4);
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            const index = (y * width + x) * 4;
-            const color = colorFunction(x / width, y / height);
-            data[index] = color[0];
-            data[index + 1] = color[1];
-            data[index + 2] = color[2];
-            data[index + 3] = color[3];
-        }
-    }
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.needsUpdate = true;
-    return texture;
+// ============================================
+// TÉCNICA: Modo Imediato (glVertex equivalente)
+// Criando objetos simples usando BufferGeometry manualmente
+// ============================================
+
+// Função para criar uma cruz usando modo imediato (vértices manuais)
+function createCross(position, size = 1) {
+    const geometry = new THREE.BufferGeometry();
+    const vertices = [];
+    const indices = [];
+    
+    // Cruz vertical (poste)
+    const halfThickness = size * 0.1;
+    const verticalHeight = size * 0.8;
+    
+    // Vértices do poste vertical (cubo simples)
+    const vBase = [
+        // Face frontal
+        -halfThickness, 0, halfThickness,
+        halfThickness, 0, halfThickness,
+        halfThickness, verticalHeight, halfThickness,
+        -halfThickness, verticalHeight, halfThickness,
+        // Face traseira
+        -halfThickness, 0, -halfThickness,
+        halfThickness, 0, -halfThickness,
+        halfThickness, verticalHeight, -halfThickness,
+        -halfThickness, verticalHeight, -halfThickness
+    ];
+    
+    // Vértices do braço horizontal
+    const horizontalWidth = size * 0.6;
+    const horizontalY = verticalHeight * 0.7;
+    const hBase = [
+        // Face frontal
+        -horizontalWidth, horizontalY - halfThickness, halfThickness,
+        horizontalWidth, horizontalY - halfThickness, halfThickness,
+        horizontalWidth, horizontalY + halfThickness, halfThickness,
+        -horizontalWidth, horizontalY + halfThickness, halfThickness,
+        // Face traseira
+        -horizontalWidth, horizontalY - halfThickness, -halfThickness,
+        horizontalWidth, horizontalY - halfThickness, -halfThickness,
+        horizontalWidth, horizontalY + halfThickness, -halfThickness,
+        -horizontalWidth, horizontalY + halfThickness, -halfThickness
+    ];
+    
+    vertices.push(...vBase, ...hBase);
+    
+    // Índices para o poste vertical (12 triângulos = 2 por face)
+    const posteIndices = [
+        0, 1, 2, 0, 2, 3, // frente
+        4, 7, 6, 4, 6, 5, // trás
+        0, 3, 7, 0, 7, 4, // esquerda
+        1, 5, 6, 1, 6, 2, // direita
+        3, 2, 6, 3, 6, 7, // topo
+        0, 4, 5, 0, 5, 1  // base
+    ];
+    
+    // Índices para o braço horizontal
+    const bracoIndices = [
+        8, 9, 10, 8, 10, 11, // frente
+        12, 15, 14, 12, 14, 13, // trás
+        8, 11, 15, 8, 15, 12, // esquerda
+        9, 13, 14, 9, 14, 10, // direita
+        11, 10, 14, 11, 14, 15, // topo
+        8, 12, 13, 8, 13, 9  // base
+    ].map(i => i + 8); // Offset pelos vértices do poste
+    
+    indices.push(...posteIndices, ...bracoIndices);
+    
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x8b7355, // Marrom dourado
+        roughness: 0.7,
+        metalness: 0.3
+    });
+    
+    const cross = new THREE.Mesh(geometry, material);
+    cross.position.copy(position);
+    cross.castShadow = true;
+    cross.receiveShadow = true;
+    
+    return cross;
 }
 
-// Função para criar normal map procedural
-function createNormalMap(width, height) {
-    const data = new Uint8Array(width * height * 4);
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            const index = (y * width + x) * 4;
-            // Gera um padrão de normal map
-            const nx = (Math.sin(x * 0.1) * 0.5 + 0.5) * 255;
-            const ny = (Math.cos(y * 0.1) * 0.5 + 0.5) * 255;
-            const nz = 255;
-            data[index] = nx;
-            data[index + 1] = ny;
-            data[index + 2] = nz;
-            data[index + 3] = 255;
+// Função para criar uma vela usando modo imediato
+function createCandle(position) {
+    const geometry = new THREE.BufferGeometry();
+    const vertices = [];
+    const indices = [];
+    
+    const height = 0.8;
+    const radius = 0.05;
+    const segments = 16;
+    
+    // Cria um cilindro manualmente (vértice por vértice)
+    // Base inferior
+    vertices.push(0, 0, 0);
+    for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        vertices.push(
+            Math.cos(angle) * radius, 0, Math.sin(angle) * radius
+        );
+    }
+    
+    // Topo
+    const topCenterIndex = vertices.length / 3;
+    vertices.push(0, height, 0);
+    for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        vertices.push(
+            Math.cos(angle) * radius, height, Math.sin(angle) * radius
+        );
+    }
+    
+    // Índices para a base
+    for (let i = 1; i <= segments; i++) {
+        indices.push(0, i, (i % segments) + 1);
+    }
+    
+    // Índices para o topo
+    const topStart = topCenterIndex;
+    for (let i = 1; i <= segments; i++) {
+        indices.push(
+            topStart,
+            topStart + (i % segments) + 1,
+            topStart + i
+        );
+    }
+    
+    // Índices para as laterais
+    for (let i = 1; i <= segments; i++) {
+        const bottom1 = i;
+        const bottom2 = (i % segments) + 1;
+        const top1 = topStart + i;
+        const top2 = topStart + (i % segments) + 1;
+        
+        indices.push(bottom1, bottom2, top1);
+        indices.push(bottom2, top2, top1);
+    }
+    
+    // Chama da vela (pequena esfera)
+    const flameRadius = 0.08;
+    const flameHeight = height + 0.15;
+    const flameSegments = 8;
+    
+    const flameCenterIndex = vertices.length / 3;
+    vertices.push(0, flameHeight, 0);
+    for (let i = 0; i <= flameSegments; i++) {
+        const theta = (i / flameSegments) * Math.PI;
+        for (let j = 0; j <= flameSegments; j++) {
+            const phi = (j / flameSegments) * Math.PI * 2;
+            const r = Math.sin(theta) * flameRadius;
+            vertices.push(
+                r * Math.cos(phi),
+                flameHeight + Math.cos(theta) * flameRadius,
+                r * Math.sin(phi)
+            );
         }
     }
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.needsUpdate = true;
-    return texture;
+    
+    // Índices para a chama (simplificado)
+    for (let i = 1; i <= flameSegments; i++) {
+        for (let j = 0; j < flameSegments; j++) {
+            const a = flameCenterIndex + (i - 1) * (flameSegments + 1) + j + 1;
+            const b = flameCenterIndex + i * (flameSegments + 1) + j + 1;
+            const c = flameCenterIndex + i * (flameSegments + 1) + (j + 1) % (flameSegments + 1) + 1;
+            const d = flameCenterIndex + (i - 1) * (flameSegments + 1) + (j + 1) % (flameSegments + 1) + 1;
+            
+            indices.push(a, b, c);
+            indices.push(a, c, d);
+        }
+    }
+    
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xf5deb3, // Bege claro (cera)
+        roughness: 0.8,
+        metalness: 0.1
+    });
+    
+    const candle = new THREE.Mesh(geometry, material);
+    candle.position.copy(position);
+    candle.castShadow = true;
+    candle.receiveShadow = true;
+    
+    // Chama emissiva
+    const flameGeometry = new THREE.SphereGeometry(flameRadius, 8, 8);
+    const flameMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff6600,
+        emissive: 0xff3300,
+        transparent: true,
+        opacity: 0.8
+    });
+    const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+    flame.position.set(0, height + 0.15, 0);
+    candle.add(flame);
+    
+    return candle;
 }
+
+// Adiciona objetos criados com modo imediato à cena
+const immediateModeObjects = new THREE.Group();
+
+// Cruz no topo da igreja (será posicionada após o modelo carregar)
+const cross = createCross(new THREE.Vector3(0, 8, 0), 1.5);
+immediateModeObjects.add(cross);
+
+// Velas dentro da igreja
+const candlePositions = [
+    new THREE.Vector3(-2, 0.5, 2),
+    new THREE.Vector3(2, 0.5, 2),
+    new THREE.Vector3(-2, 0.5, -2),
+    new THREE.Vector3(2, 0.5, -2)
+];
+
+candlePositions.forEach(pos => {
+    const candle = createCandle(pos);
+    immediateModeObjects.add(candle);
+});
+
+scene.add(immediateModeObjects);
 
 // Função de ruído simples para variação de terreno
 function noise2D(x, z) {
@@ -687,142 +833,6 @@ for (let i = 0; i < 12; i++) {
 }
 scene.add(decorativeStones);
 
-// A. MODELAGEM USANDO MODO IMEDIATO (glVertex style) - Criar objetos programaticamente
-// Cria uma cruz decorativa no topo da igreja usando BufferGeometry (equivalente moderno)
-function createCrossGeometry() {
-    const geometry = new THREE.BufferGeometry();
-    const vertices = [];
-    const indices = [];
-    
-    // Base vertical da cruz
-    const baseWidth = 0.2;
-    const baseHeight = 2.0;
-    const baseDepth = 0.1;
-    
-    // Vértices da base (8 vértices de um cubo)
-    const baseVerts = [
-        // Frente
-        [-baseWidth/2, 0, baseDepth/2],
-        [baseWidth/2, 0, baseDepth/2],
-        [baseWidth/2, baseHeight, baseDepth/2],
-        [-baseWidth/2, baseHeight, baseDepth/2],
-        // Trás
-        [-baseWidth/2, 0, -baseDepth/2],
-        [baseWidth/2, 0, -baseDepth/2],
-        [baseWidth/2, baseHeight, -baseDepth/2],
-        [-baseWidth/2, baseHeight, -baseDepth/2]
-    ];
-    
-    // Braço horizontal da cruz
-    const armWidth = 1.5;
-    const armHeight = 0.2;
-    const armDepth = 0.1;
-    const armY = baseHeight * 0.7;
-    
-    const armVerts = [
-        // Frente
-        [-armWidth/2, armY - armHeight/2, armDepth/2],
-        [armWidth/2, armY - armHeight/2, armDepth/2],
-        [armWidth/2, armY + armHeight/2, armDepth/2],
-        [-armWidth/2, armY + armHeight/2, armDepth/2],
-        // Trás
-        [-armWidth/2, armY - armHeight/2, -armDepth/2],
-        [armWidth/2, armY - armHeight/2, -armDepth/2],
-        [armWidth/2, armY + armHeight/2, -armDepth/2],
-        [-armWidth/2, armY + armHeight/2, -armDepth/2]
-    ];
-    
-    // Adiciona vértices
-    let vertexIndex = 0;
-    
-    // Função para adicionar cubo
-    function addCube(verts, startIndex) {
-        const indices = [
-            // Frente
-            startIndex, startIndex + 1, startIndex + 2,
-            startIndex, startIndex + 2, startIndex + 3,
-            // Trás
-            startIndex + 4, startIndex + 6, startIndex + 5,
-            startIndex + 4, startIndex + 7, startIndex + 6,
-            // Topo
-            startIndex + 3, startIndex + 2, startIndex + 6,
-            startIndex + 3, startIndex + 6, startIndex + 7,
-            // Base
-            startIndex, startIndex + 5, startIndex + 1,
-            startIndex, startIndex + 4, startIndex + 5,
-            // Direita
-            startIndex + 1, startIndex + 5, startIndex + 6,
-            startIndex + 1, startIndex + 6, startIndex + 2,
-            // Esquerda
-            startIndex, startIndex + 3, startIndex + 7,
-            startIndex, startIndex + 7, startIndex + 4
-        ];
-        return indices;
-    }
-    
-    // Adiciona base
-    baseVerts.forEach(v => vertices.push(...v));
-    indices.push(...addCube(baseVerts, vertexIndex));
-    vertexIndex += 8;
-    
-    // Adiciona braço
-    armVerts.forEach(v => vertices.push(...v));
-    indices.push(...addCube(armVerts, vertexIndex));
-    
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    
-    return geometry;
-}
-
-// Cria cruz decorativa
-const crossGeometry = createCrossGeometry();
-const crossMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffd700, // Dourado
-    metalness: 0.8,
-    roughness: 0.2,
-    emissive: 0x332200,
-    emissiveIntensity: 0.2
-});
-const cross = new THREE.Mesh(crossGeometry, crossMaterial);
-cross.position.set(0, 8, 0); // Posiciona acima da igreja
-cross.castShadow = true;
-scene.add(cross);
-
-// K. TRANSPARÊNCIA (BLENDING) - Adiciona objetos transparentes
-// Cria vitrais transparentes (janelas da igreja)
-function createStainedGlassWindow() {
-    const geometry = new THREE.PlaneGeometry(1, 2);
-    const material = new THREE.MeshPhysicalMaterial({
-        color: 0x4a90e2,
-        transparent: true,
-        opacity: 0.6,
-        transmission: 0.9, // Transmissão de luz
-        roughness: 0.1,
-        metalness: 0.0,
-        side: THREE.DoubleSide
-    });
-    const window = new THREE.Mesh(geometry, material);
-    return window;
-}
-
-// Adiciona alguns vitrais decorativos
-const stainedGlassGroup = new THREE.Group();
-for (let i = 0; i < 6; i++) {
-    const window = createStainedGlassWindow();
-    const angle = (i / 6) * Math.PI * 2;
-    const radius = 6;
-    window.position.set(
-        Math.cos(angle) * radius,
-        3,
-        Math.sin(angle) * radius
-    );
-    window.lookAt(0, 3, 0);
-    stainedGlassGroup.add(window);
-}
-scene.add(stainedGlassGroup);
-
 // Árvores simples ao redor da igreja
 const treesGroup = new THREE.Group();
 
@@ -928,6 +938,20 @@ loader.load(
                                     mat.needsUpdate = true;
                                 }
                             }
+                            
+                            // Filtro Anisotrópico - aplica em todas as texturas
+                            if (mat.map) {
+                                mat.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                            }
+                            if (mat.normalMap) {
+                                mat.normalMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                            }
+                            if (mat.roughnessMap) {
+                                mat.roughnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                            }
+                            if (mat.metalnessMap) {
+                                mat.metalnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                            }
                         });
                     } else {
                         // Material único
@@ -952,6 +976,21 @@ loader.load(
                                 child.material.needsUpdate = true;
                             }
                         }
+                        
+                        // Filtro Anisotrópico - aplica em todas as texturas
+                        const mat = child.material;
+                        if (mat.map) {
+                            mat.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                        }
+                        if (mat.normalMap) {
+                            mat.normalMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                        }
+                        if (mat.roughnessMap) {
+                            mat.roughnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                        }
+                        if (mat.metalnessMap) {
+                            mat.metalnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                        }
                     }
                 }
             }
@@ -960,11 +999,15 @@ loader.load(
         // Calcula o bounding box para centralizar o modelo
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
         
         // Centraliza o modelo
         model.position.x = 0;
         model.position.y = 0;
         model.position.z = 0;
+        
+        // Ajusta a posição da cruz para ficar no topo da igreja
+        cross.position.set(0, size.y / 2 + 1.5, 0);
         
         // Atualiza as variáveis de posição
         modelPosition.x = model.position.x;
@@ -1102,6 +1145,31 @@ function initGUI() {
         ambientLight.color.setHex(value);
     });
     
+    // Controles de Fog (Neblina)
+    const fogConfig = {
+        habilitado: true,
+        cor: 0x87ceeb,
+        densidade: 0.015
+    };
+    ambienteFolder.add(fogConfig, 'habilitado').name('Fog Habilitado').onChange((value) => {
+        if (value) {
+            scene.fog = new THREE.FogExp2(fogConfig.cor, fogConfig.densidade);
+        } else {
+            scene.fog = null;
+        }
+    });
+    ambienteFolder.addColor(fogConfig, 'cor').name('Cor do Fog').onChange((value) => {
+        if (scene.fog && scene.fog.isFogExp2) {
+            scene.fog.color.setHex(value);
+            fogConfig.cor = value;
+        }
+    });
+    ambienteFolder.add(fogConfig, 'densidade', 0, 0.1, 0.001).name('Densidade do Fog').onChange((value) => {
+        if (scene.fog && scene.fog.isFogExp2) {
+            scene.fog.density = value;
+        }
+    });
+    
     // Controles da Luz de Hemisfério
     const hemisphereFolder = gui.addFolder('Luz de Hemisfério');
     const hemisphereConfig = {
@@ -1163,6 +1231,21 @@ function initGUI() {
     const treesFolder = gui.addFolder('Árvores');
     treesFolder.add(treesGroup, 'visible').name('Visível');
     
+    // Controles de Objetos Modo Imediato
+    const immediateFolder = gui.addFolder('Modo Imediato (glVertex)');
+    immediateFolder.add(immediateModeObjects, 'visible').name('Visível');
+    immediateFolder.add(cross, 'visible').name('Cruz Visível');
+    
+    // Controles para velas
+    const candlesVisible = { value: true };
+    immediateFolder.add(candlesVisible, 'value').name('Velas Visíveis').onChange((value) => {
+        immediateModeObjects.children.forEach(child => {
+            if (child !== cross) {
+                child.visible = value;
+            }
+        });
+    });
+    
     // Controles da Cena
     const sceneFolder = gui.addFolder('Cena');
     const bgColor = { cor: 0x000000 };
@@ -1201,37 +1284,6 @@ function initGUI() {
     
     sceneFolder.add(gridHelper, 'visible').name('Mostrar Grid');
     sceneFolder.add(axesHelper, 'visible').name('Mostrar Eixos');
-    
-    // Controles de Neblina (Fog)
-    const fogFolder = gui.addFolder('Neblina (Fog)');
-    const fogConfig = {
-        enabled: true,
-        density: fog.density,
-        color: '#87ceeb'
-    };
-    fogFolder.add(fogConfig, 'enabled').name('Ativado').onChange((value) => {
-        scene.fog = value ? fog : null;
-    });
-    fogFolder.add(fogConfig, 'density', 0, 0.1, 0.001).name('Densidade').onChange((value) => {
-        fog.density = value;
-    });
-    fogFolder.addColor(fogConfig, 'color').name('Cor').onChange((value) => {
-        fog.color.setHex(value);
-    });
-    
-    // Controles de Objetos Programáticos
-    const proceduralFolder = gui.addFolder('Objetos Programáticos');
-    proceduralFolder.add(cross, 'visible').name('Cruz Decorativa');
-    proceduralFolder.add(stainedGlassGroup, 'visible').name('Vitrais');
-    
-    // Controles de Texturas
-    const textureFolder = gui.addFolder('Texturas do Terreno');
-    textureFolder.add(terrainMaterial.normalScale, 'x', 0, 2, 0.1).name('Normal Scale X');
-    textureFolder.add(terrainMaterial.normalScale, 'y', 0, 2, 0.1).name('Normal Scale Y');
-    if (grassTexture) {
-        textureFolder.add(grassTexture.repeat, 'x', 1, 20, 1).name('Repetição Textura X');
-        textureFolder.add(grassTexture.repeat, 'y', 1, 20, 1).name('Repetição Textura Y');
-    }
     
     // Função para resetar câmera
     sceneFolder.add({
