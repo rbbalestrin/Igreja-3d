@@ -5,7 +5,6 @@ import GUI from 'lil-gui';
 
 // Cena
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb); // Cor do céu azul claro
 
 // Câmera
 const camera = new THREE.PerspectiveCamera(
@@ -32,8 +31,17 @@ controls.minDistance = 2;
 controls.maxDistance = 50;
 
 // Iluminação
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.1);
 scene.add(ambientLight);
+
+// Luz de Hemisfério (ilumina de cima para baixo com cores diferentes)
+const hemisphereLight = new THREE.HemisphereLight(
+    0x87ceeb, // Cor do céu (azul claro)
+    0x4a7c59, // Cor do solo (verde grama)
+    0.3 // Intensidade inicial baixa para destacar as luzes pontuais
+);
+hemisphereLight.position.set(0, 50, 0);
+scene.add(hemisphereLight);
 
 // Cria múltiplos pontos de luz
 const lights = [];
@@ -77,9 +85,19 @@ lights.forEach((lightData, index) => {
     lightHelpers.push(helper);
 });
 
-// Terreno - Base de grama
+// Skybox - Céu
+const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+const skyMaterial = new THREE.MeshBasicMaterial({
+    color: 0x87ceeb,
+    side: THREE.BackSide, // Renderiza o interior da esfera
+    fog: false
+});
+const skybox = new THREE.Mesh(skyGeometry, skyMaterial);
+scene.add(skybox);
+
+// Terreno - Base de grama melhorado
 const terrainSize = 50;
-const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 32, 32);
+const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 64, 64);
 const terrainMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x4a7c59, // Verde grama escuro
     roughness: 0.9,
@@ -90,16 +108,42 @@ terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
 
-// Adiciona variação de altura ao terreno (opcional - terreno levemente ondulado)
+// Adiciona variação de altura ao terreno (terreno mais interessante)
 const vertices = terrainGeometry.attributes.position;
 for (let i = 0; i < vertices.count; i++) {
     const x = vertices.getX(i);
     const z = vertices.getZ(i);
-    // Adiciona pequenas variações de altura para dar naturalidade
-    const y = Math.random() * 0.1 - 0.05;
+    // Cria um padrão de ondas suaves para o terreno
+    const distance = Math.sqrt(x * x + z * z);
+    const wave1 = Math.sin(distance * 0.2) * 0.3;
+    const wave2 = Math.sin(x * 0.3) * Math.cos(z * 0.3) * 0.2;
+    const noise = (Math.random() - 0.5) * 0.1;
+    const y = wave1 + wave2 + noise;
     vertices.setY(i, y);
 }
 terrainGeometry.computeVertexNormals();
+
+// Adiciona patches de grama mais escura/clara para variação
+const colors = [];
+const color1 = new THREE.Color(0x4a7c59); // Verde escuro
+const color2 = new THREE.Color(0x5a8c69); // Verde médio
+const color3 = new THREE.Color(0x3a6c49); // Verde muito escuro
+
+for (let i = 0; i < vertices.count; i++) {
+    const x = vertices.getX(i);
+    const z = vertices.getZ(i);
+    // Cria padrões de cor baseados na posição
+    const pattern = Math.sin(x * 0.5) * Math.cos(z * 0.5);
+    if (pattern > 0.3) {
+        colors.push(color2.r, color2.g, color2.b);
+    } else if (pattern < -0.3) {
+        colors.push(color3.r, color3.g, color3.b);
+    } else {
+        colors.push(color1.r, color1.g, color1.b);
+    }
+}
+terrainGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+terrainMaterial.vertexColors = true;
 
 // Caminho de pedras em frente à igreja
 const pathGroup = new THREE.Group();
@@ -432,12 +476,30 @@ function initGUI() {
     
     // Controles do Ambiente
     const ambienteFolder = gui.addFolder('Ambiente');
-    ambienteFolder.add(guiConfig.ambiente, 'intensidade', 0, 2, 0.1).name('Intensidade').onChange((value) => {
+    ambienteFolder.add(guiConfig.ambiente, 'intensidade', 0, 2, 0.1).name('Luz Ambiente Intensidade').onChange((value) => {
         ambientLight.intensity = value;
     });
-    ambienteFolder.addColor(guiConfig.ambiente, 'cor').name('Cor').onChange((value) => {
+    ambienteFolder.addColor(guiConfig.ambiente, 'cor').name('Luz Ambiente Cor').onChange((value) => {
         ambientLight.color.setHex(value);
     });
+    
+    // Controles da Luz de Hemisfério
+    const hemisphereFolder = gui.addFolder('Luz de Hemisfério');
+    const hemisphereConfig = {
+        intensidade: hemisphereLight.intensity,
+        corCeu: '#87ceeb',
+        corSolo: '#4a7c59'
+    };
+    hemisphereFolder.add(hemisphereConfig, 'intensidade', 0, 2, 0.1).name('Intensidade').onChange((value) => {
+        hemisphereLight.intensity = value;
+    });
+    hemisphereFolder.addColor(hemisphereConfig, 'corCeu').name('Cor do Céu').onChange((value) => {
+        hemisphereLight.color.setHex(value);
+    });
+    hemisphereFolder.addColor(hemisphereConfig, 'corSolo').name('Cor do Solo').onChange((value) => {
+        hemisphereLight.groundColor.setHex(value);
+    });
+    hemisphereFolder.add(hemisphereLight, 'visible').name('Visível');
     
     // Controles do Terreno
     const terrainFolder = gui.addFolder('Terreno');
@@ -471,6 +533,14 @@ function initGUI() {
     sceneFolder.addColor(bgColor, 'cor').name('Cor de Fundo').onChange((value) => {
         scene.background = new THREE.Color(value);
     });
+    
+    // Controles do Skybox
+    const skyboxConfig = { cor: 0x87ceeb };
+    sceneFolder.addColor(skyboxConfig, 'cor').name('Cor do Skybox').onChange((value) => {
+        skyboxMaterial.color.setHex(value);
+    });
+    sceneFolder.add(skybox, 'visible').name('Mostrar Skybox');
+    
     sceneFolder.add(gridHelper, 'visible').name('Mostrar Grid');
     sceneFolder.add(axesHelper, 'visible').name('Mostrar Eixos');
     
