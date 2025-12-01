@@ -564,9 +564,14 @@ function updateEnvironmentForDayNight() {
     hemisphereLight.intensity = 0.3 - dayNightBlend * 0.2; // Menos intenso à noite
 }
 
-// Terreno - Base (mantido para sombras e física)
-const terrainSize = 50;
-const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 128, 128); // Mais subdivisões para detalhe
+// ============================================
+// Plataforma Plana Padrão
+// Terreno simples e plano para a cena natalina
+// ============================================
+
+// Terreno - Base (invisível, apenas para física)
+const terrainSize = 200;
+const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 1, 1);
 const terrainMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x4a7c59,
     roughness: 0.9,
@@ -578,99 +583,23 @@ terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
 
-// Chão fixo removido - substituído por InfiniteTerrain
+// Chão visível - plataforma plana
+const floorSize = 200;
+const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize, 1, 1);
+const floorMaterial = new THREE.MeshStandardMaterial({
+    color: 0x3a6b4a, // Verde mais escuro que a grama
+    roughness: 0.9,
+    metalness: 0.1
+});
+const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = 0; // Plano no nível 0
+floor.receiveShadow = true;
+scene.add(floor);
 
-// Função de ruído simples para variação de terreno
-function noise2D(x, z) {
-    const X = Math.floor(x) & 255;
-    const Z = Math.floor(z) & 255;
-    x -= Math.floor(x);
-    z -= Math.floor(z);
-    const u = x * x * (3.0 - 2.0 * x);
-    const v = z * z * (3.0 - 2.0 * z);
-    
-    // Hash function simples
-    const A = (X + Z * 57) * 0.01;
-    const B = ((X + 1) + Z * 57) * 0.01;
-    const C = (X + (Z + 1) * 57) * 0.01;
-    const D = ((X + 1) + (Z + 1) * 57) * 0.01;
-    
-    return (1.0 - v) * (1.0 - u) * Math.sin(A) +
-           (1.0 - v) * u * Math.sin(B) +
-           v * (1.0 - u) * Math.sin(C) +
-           v * u * Math.sin(D);
-}
-
-// Função de ruído fractal (múltiplas camadas)
-function fractalNoise(x, z, octaves = 4) {
-    let value = 0;
-    let amplitude = 1;
-    let frequency = 0.1;
-    let maxValue = 0;
-    
-    for (let i = 0; i < octaves; i++) {
-        value += noise2D(x * frequency, z * frequency) * amplitude;
-        maxValue += amplitude;
-        amplitude *= 0.5;
-        frequency *= 2;
-    }
-    
-    return value / maxValue;
-}
-
-// Adiciona variação de altura ao terreno
-const vertices = terrainGeometry.attributes.position;
-const flatZoneRadius = 8; // Raio da zona plana ao redor da igreja
-const maxHeight = 2.0; // Altura máxima do terreno
-
-for (let i = 0; i < vertices.count; i++) {
-    const x = vertices.getX(i);
-    const z = vertices.getZ(i);
-    
-    // Distância do centro (onde a igreja está)
-    const distanceFromCenter = Math.sqrt(x * x + z * z);
-    
-    // Função que reduz a variação próximo ao centro
-    // Retorna 0 no centro e 1 nas bordas
-    const heightFactor = Math.max(0, Math.min(1, (distanceFromCenter - flatZoneRadius) / (terrainSize / 2 - flatZoneRadius)));
-    
-    // Gera altura usando ruído fractal
-    const noiseValue = fractalNoise(x, z, 4);
-    const height = noiseValue * maxHeight * heightFactor;
-    
-    // Adiciona pequenas variações locais
-    const localVariation = (Math.random() - 0.5) * 0.2 * heightFactor;
-    
-    vertices.setY(i, height + localVariation);
-}
-
-terrainGeometry.computeVertexNormals();
-
-// Função para obter altura do terreno em uma posição (x, z) - INFINITA
+// Função simplificada - sempre retorna 0 (terreno plano)
 function getTerrainHeight(x, z) {
-    const distanceFromCenter = Math.sqrt(x * x + z * z);
-    const flatZoneRadius = 8;
-    const maxHeight = 2.0;
-    
-    // Remove dependência de terrainSize - funciona para qualquer coordenada
-    // Zona plana no centro, transição suave para terreno variado
-    const transitionStart = flatZoneRadius;
-    const transitionEnd = flatZoneRadius + 20; // Zona de transição de 20 unidades
-    
-    let heightFactor = 0;
-    if (distanceFromCenter < transitionStart) {
-        heightFactor = 0; // Zona plana no centro
-    } else if (distanceFromCenter < transitionEnd) {
-        // Transição suave
-        heightFactor = (distanceFromCenter - transitionStart) / (transitionEnd - transitionStart);
-    } else {
-        heightFactor = 1.0; // Terreno variado completo
-    }
-    
-    const noiseValue = fractalNoise(x, z, 4);
-    const height = noiseValue * maxHeight * heightFactor;
-    
-    return height;
+    return 0;
 }
 
 // Sistema de Trilhas (GroundData)
@@ -769,9 +698,8 @@ class InfiniteGrass {
             // Gera em uma área maior para garantir cobertura
             const x = (Math.random() - 0.5) * totalSize;
             const z = (Math.random() - 0.5) * totalSize;
-            // Calcula a altura do terreno nesta posição
-            const terrainHeight = getTerrainHeight(x, z);
-            const center = new THREE.Vector3(x, terrainHeight, z);
+            // Terreno plano - altura sempre 0
+            const center = new THREE.Vector3(x, 0, z);
             this.centers.push(center);
             
             const height = 0.3 + Math.random() * 0.2;
@@ -968,14 +896,12 @@ class InfiniteGrass {
                 if (Math.abs(dx) > halfSize) {
                     const offset = Math.sign(dx) * tileSize;
                     center.x += offset;
-                    // Atualiza altura do terreno na nova posição
-                    center.y = getTerrainHeight(center.x, center.z);
+                    center.y = 0; // Terreno plano
                 }
                 if (Math.abs(dz) > halfSize) {
                     const offset = Math.sign(dz) * tileSize;
                     center.z += offset;
-                    // Atualiza altura do terreno na nova posição
-                    center.y = getTerrainHeight(center.x, center.z);
+                    center.y = 0; // Terreno plano
                 }
                 
                 // Atualiza atributos
@@ -991,135 +917,6 @@ class InfiniteGrass {
 
 // Aumenta a área de grama para cobrir mais espaço e adiciona mais blades
 const infiniteGrass = new InfiniteGrass(100000, 100);
-
-// ============================================
-// TÉCNICA: Terreno Infinito Procedural
-// Sistema de tiles que se reposicionam conforme a câmera se move
-// ============================================
-
-class InfiniteTerrain {
-    constructor(tileSize = 100, gridSize = 3) {
-        this.tileSize = tileSize;
-        this.gridSize = gridSize; // Grid 3x3 = 9 tiles visíveis
-        this.tiles = [];
-        this.tileGroup = new THREE.Group();
-        this.currentTileX = 0;
-        this.currentTileZ = 0;
-        
-        scene.add(this.tileGroup);
-        this.init();
-    }
-    
-    init() {
-        // Cria grid inicial de tiles ao redor da origem
-        const halfGrid = Math.floor(this.gridSize / 2);
-        for (let x = -halfGrid; x <= halfGrid; x++) {
-            for (let z = -halfGrid; z <= halfGrid; z++) {
-                this.createTile(x * this.tileSize, z * this.tileSize);
-            }
-        }
-    }
-    
-    createTile(centerX, centerZ) {
-        const segments = 32; // Subdivisões para detalhe
-        const geometry = new THREE.PlaneGeometry(
-            this.tileSize,
-            this.tileSize,
-            segments,
-            segments
-        );
-        
-        // Deforma os vértices usando getTerrainHeight
-        const vertices = geometry.attributes.position;
-        for (let i = 0; i < vertices.count; i++) {
-            const x = vertices.getX(i) + centerX;
-            const z = vertices.getZ(i) + centerZ;
-            const height = getTerrainHeight(x, z);
-            vertices.setY(i, height);
-        }
-        
-        geometry.computeVertexNormals();
-        
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x3a6b4a, // Verde escuro (chão)
-            roughness: 0.9,
-            metalness: 0.1
-        });
-        
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set(centerX, 0, centerZ);
-        mesh.receiveShadow = true;
-        
-        this.tileGroup.add(mesh);
-        this.tiles.push({
-            mesh: mesh,
-            centerX: centerX,
-            centerZ: centerZ,
-            tileX: Math.floor(centerX / this.tileSize),
-            tileZ: Math.floor(centerZ / this.tileSize)
-        });
-    }
-    
-    update(cameraPos) {
-        // Calcula qual tile a câmera está
-        const cameraTileX = Math.floor(cameraPos.x / this.tileSize);
-        const cameraTileZ = Math.floor(cameraPos.z / this.tileSize);
-        
-        // Se a câmera mudou de tile, reposiciona os tiles
-        if (cameraTileX !== this.currentTileX || cameraTileZ !== this.currentTileZ) {
-            this.currentTileX = cameraTileX;
-            this.currentTileZ = cameraTileZ;
-            
-            // Remove tiles que estão muito longe
-            const halfGrid = Math.floor(this.gridSize / 2);
-            const minTileX = cameraTileX - halfGrid;
-            const maxTileX = cameraTileX + halfGrid;
-            const minTileZ = cameraTileZ - halfGrid;
-            const maxTileZ = cameraTileZ + halfGrid;
-            
-            // Filtra tiles que ainda estão no range
-            const tilesToKeep = [];
-            const tilesToRemove = [];
-            
-            this.tiles.forEach(tile => {
-                if (tile.tileX >= minTileX && tile.tileX <= maxTileX &&
-                    tile.tileZ >= minTileZ && tile.tileZ <= maxTileZ) {
-                    tilesToKeep.push(tile);
-                } else {
-                    tilesToRemove.push(tile);
-                }
-            });
-            
-            // Remove tiles antigos
-            tilesToRemove.forEach(tile => {
-                this.tileGroup.remove(tile.mesh);
-                tile.mesh.geometry.dispose();
-                tile.mesh.material.dispose();
-            });
-            
-            this.tiles = tilesToKeep;
-            
-            // Cria novos tiles que estão faltando
-            const existingTiles = new Set();
-            this.tiles.forEach(tile => {
-                existingTiles.add(`${tile.tileX},${tile.tileZ}`);
-            });
-            
-            for (let x = minTileX; x <= maxTileX; x++) {
-                for (let z = minTileZ; z <= maxTileZ; z++) {
-                    const key = `${x},${z}`;
-                    if (!existingTiles.has(key)) {
-                        this.createTile(x * this.tileSize, z * this.tileSize);
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Cria o terreno infinito
-const infiniteTerrain = new InfiniteTerrain(100, 3);
 
 // Caminho de pedras em frente à igreja
 const pathGroup = new THREE.Group();
@@ -1149,90 +946,302 @@ for (let i = 0; i < 8; i++) {
 }
 scene.add(pathGroup);
 
-// Pedras decorativas ao redor
-const decorativeStones = new THREE.Group();
-for (let i = 0; i < 12; i++) {
-    const angle = (i / 12) * Math.PI * 2;
-    const radius = 8 + Math.random() * 4;
-    const stoneSize = 0.3 + Math.random() * 0.2;
+// ============================================
+// Decorações Natalinas Aleatórias
+// ============================================
+
+const christmasDecorations = new THREE.Group();
+
+// Função para criar decorações natalinas
+function createChristmasDecoration(type, x, z) {
+    const decoration = new THREE.Group();
     
-    const stoneGeometry = new THREE.DodecahedronGeometry(stoneSize, 0);
-    const stoneMaterial = new THREE.MeshStandardMaterial({
-        color: new THREE.Color().setHSL(0.1, 0.2, 0.3 + Math.random() * 0.2),
-        roughness: 0.9,
-        metalness: 0.1
-    });
-    const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
+    switch(type) {
+        case 'present':
+            // Presente - caixa colorida com fita
+            const boxSize = 0.3 + Math.random() * 0.2;
+            const boxGeometry = new THREE.BoxGeometry(boxSize, boxSize * 0.6, boxSize);
+            const boxColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff]; // Vermelho, verde, azul, amarelo, magenta
+            const boxColor = boxColors[Math.floor(Math.random() * boxColors.length)];
+            const boxMaterial = new THREE.MeshStandardMaterial({
+                color: boxColor,
+                roughness: 0.6,
+                metalness: 0.2
+            });
+            const box = new THREE.Mesh(boxGeometry, boxMaterial);
+            box.position.y = boxSize * 0.3;
+            box.castShadow = true;
+            box.receiveShadow = true;
+            decoration.add(box);
+            
+            // Fita horizontal
+            const ribbonHGeometry = new THREE.BoxGeometry(boxSize * 1.1, boxSize * 0.1, boxSize * 0.1);
+            const ribbonHMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffd700, // Dourado
+                roughness: 0.4,
+                metalness: 0.6
+            });
+            const ribbonH = new THREE.Mesh(ribbonHGeometry, ribbonHMaterial);
+            ribbonH.position.y = boxSize * 0.3;
+            decoration.add(ribbonH);
+            
+            // Fita vertical
+            const ribbonVGeometry = new THREE.BoxGeometry(boxSize * 0.1, boxSize * 0.7, boxSize * 0.1);
+            const ribbonVMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffd700,
+                roughness: 0.4,
+                metalness: 0.6
+            });
+            const ribbonV = new THREE.Mesh(ribbonVGeometry, ribbonVMaterial);
+            ribbonV.position.y = boxSize * 0.3;
+            decoration.add(ribbonV);
+            
+            // Laço no topo
+            const bowGeometry = new THREE.SphereGeometry(boxSize * 0.15, 8, 8);
+            const bowMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffd700,
+                roughness: 0.3,
+                metalness: 0.7
+            });
+            const bow = new THREE.Mesh(bowGeometry, bowMaterial);
+            bow.position.y = boxSize * 0.6;
+            decoration.add(bow);
+            break;
+            
+        case 'star':
+            // Estrela decorativa
+            const starSize = 0.2 + Math.random() * 0.15;
+            const starGeometry = new THREE.ConeGeometry(starSize, starSize * 0.8, 5);
+            const starMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffd700,
+                emissive: 0xffaa00,
+                emissiveIntensity: 0.5,
+                roughness: 0.3,
+                metalness: 0.8
+            });
+            const star = new THREE.Mesh(starGeometry, starMaterial);
+            star.position.y = starSize * 0.4;
+            star.rotation.z = Math.PI;
+            star.castShadow = true;
+            star.receiveShadow = true;
+            decoration.add(star);
+            break;
+            
+        case 'bell':
+            // Sino
+            const bellSize = 0.15 + Math.random() * 0.1;
+            const bellGeometry = new THREE.ConeGeometry(bellSize, bellSize * 1.2, 8);
+            const bellMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffd700,
+                roughness: 0.3,
+                metalness: 0.9
+            });
+            const bell = new THREE.Mesh(bellGeometry, bellMaterial);
+            bell.position.y = bellSize * 0.6;
+            bell.rotation.x = Math.PI;
+            bell.castShadow = true;
+            bell.receiveShadow = true;
+            decoration.add(bell);
+            
+            // Alça do sino
+            const handleGeometry = new THREE.TorusGeometry(bellSize * 0.3, bellSize * 0.05, 8, 16);
+            const handleMaterial = new THREE.MeshStandardMaterial({
+                color: 0x8b4513,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const handle = new THREE.Mesh(handleGeometry, handleMaterial);
+            handle.position.y = bellSize * 1.3;
+            handle.rotation.x = Math.PI / 2;
+            decoration.add(handle);
+            break;
+            
+        case 'candle':
+            // Vela decorativa
+            const candleHeight = 0.2 + Math.random() * 0.15;
+            const candleRadius = 0.03;
+            const candleGeometry = new THREE.CylinderGeometry(candleRadius, candleRadius, candleHeight, 8);
+            const candleMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.7,
+                metalness: 0.1
+            });
+            const candle = new THREE.Mesh(candleGeometry, candleMaterial);
+            candle.position.y = candleHeight / 2;
+            candle.castShadow = true;
+            candle.receiveShadow = true;
+            decoration.add(candle);
+            
+            // Chama
+            const flameGeometry = new THREE.SphereGeometry(candleRadius * 1.5, 8, 8);
+            const flameMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff6600,
+                emissive: 0xff3300,
+                transparent: true,
+                opacity: 0.8
+            });
+            const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+            flame.position.y = candleHeight + candleRadius * 1.5;
+            decoration.add(flame);
+            break;
+            
+        default:
+            // Decoração genérica (esfera colorida)
+            const sphereSize = 0.15 + Math.random() * 0.1;
+            const sphereGeometry = new THREE.SphereGeometry(sphereSize, 8, 8);
+            const sphereColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00];
+            const sphereColor = sphereColors[Math.floor(Math.random() * sphereColors.length)];
+            const sphereMaterial = new THREE.MeshStandardMaterial({
+                color: sphereColor,
+                roughness: 0.4,
+                metalness: 0.6
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.position.y = sphereSize;
+            sphere.castShadow = true;
+            sphere.receiveShadow = true;
+            decoration.add(sphere);
+    }
     
-    stone.position.set(
-        Math.cos(angle) * radius,
-        stoneSize * 0.5,
-        Math.sin(angle) * radius
-    );
-    stone.rotation.set(
-        Math.random() * Math.PI,
-        Math.random() * Math.PI,
-        Math.random() * Math.PI
-    );
-    stone.castShadow = true;
-    stone.receiveShadow = true;
-    decorativeStones.add(stone);
+    decoration.position.set(x, 0, z);
+    return decoration;
 }
-scene.add(decorativeStones);
 
-// Árvores simples ao redor da igreja
-const treesGroup = new THREE.Group();
+// Gera 20-30 decorações natalinas aleatórias
+const numDecorations = 20 + Math.floor(Math.random() * 11); // 20-30 decorações
+const decorationTypes = ['present', 'star', 'bell', 'candle'];
+const minDecoRadius = 6; // Distância mínima da igreja
+const maxDecoRadius = 35; // Distância máxima da igreja
 
-// Função para criar uma árvore simples
-function createTree(x, z, scale = 1) {
+for (let i = 0; i < numDecorations; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = minDecoRadius + Math.random() * (maxDecoRadius - minDecoRadius);
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    
+    // Escolhe tipo aleatório
+    const type = decorationTypes[Math.floor(Math.random() * decorationTypes.length)];
+    
+    const decoration = createChristmasDecoration(type, x, z);
+    christmasDecorations.add(decoration);
+}
+
+scene.add(christmasDecorations);
+
+// ============================================
+// Árvores de Natal Decoradas
+// ============================================
+
+const christmasTreesGroup = new THREE.Group();
+
+// Função para criar uma árvore de Natal decorada
+function createChristmasTree(x, z, scale = 1) {
     const tree = new THREE.Group();
     
     // Tronco
-    const trunkGeometry = new THREE.CylinderGeometry(0.2 * scale, 0.25 * scale, 1.5 * scale, 8);
+    const trunkGeometry = new THREE.CylinderGeometry(0.15 * scale, 0.2 * scale, 1.2 * scale, 8);
     const trunkMaterial = new THREE.MeshStandardMaterial({
         color: 0x5d4037, // Marrom
         roughness: 0.9,
         metalness: 0.1
     });
     const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-    trunk.position.y = 0.75 * scale;
+    trunk.position.y = 0.6 * scale;
     trunk.castShadow = true;
     trunk.receiveShadow = true;
     tree.add(trunk);
     
-    // Folhas (copa)
-    const leavesGeometry = new THREE.ConeGeometry(1 * scale, 2 * scale, 8);
-    const leavesMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2d5016, // Verde escuro
-        roughness: 0.8,
-        metalness: 0.1
+    // Camadas de folhas (formato de pinheiro)
+    const layerHeights = [0.8, 1.2, 1.6, 2.0]; // Alturas das camadas
+    const layerRadii = [1.2, 1.0, 0.8, 0.6]; // Raios das camadas (decrescentes)
+    const layerColors = [0x1a5a1a, 0x1d5f1d, 0x206420, 0x236923]; // Verdes ligeiramente diferentes
+    
+    layerHeights.forEach((height, index) => {
+        const layerGeometry = new THREE.ConeGeometry(
+            layerRadii[index] * scale,
+            height * scale * 0.5,
+            8
+        );
+        const layerMaterial = new THREE.MeshStandardMaterial({
+            color: layerColors[index],
+            roughness: 0.8,
+            metalness: 0.1
+        });
+        const layer = new THREE.Mesh(layerGeometry, layerMaterial);
+        layer.position.y = (height * scale * 0.5) + (index * 0.3 * scale);
+        layer.castShadow = true;
+        layer.receiveShadow = true;
+        tree.add(layer);
     });
-    const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-    leaves.position.y = 2 * scale;
-    leaves.castShadow = true;
-    leaves.receiveShadow = true;
-    tree.add(leaves);
+    
+    // Bolas decorativas coloridas
+    const ornamentColors = [0xff0000, 0xffd700, 0x0000ff, 0xff00ff, 0x00ffff]; // Vermelho, dourado, azul, magenta, ciano
+    const numOrnaments = 8 + Math.floor(Math.random() * 5); // 8-12 bolas
+    
+    for (let i = 0; i < numOrnaments; i++) {
+        const ornamentGeometry = new THREE.SphereGeometry(0.08 * scale, 8, 8);
+        const ornamentMaterial = new THREE.MeshStandardMaterial({
+            color: ornamentColors[Math.floor(Math.random() * ornamentColors.length)],
+            roughness: 0.3,
+            metalness: 0.7,
+            emissive: new THREE.Color(ornamentColors[Math.floor(Math.random() * ornamentColors.length)]),
+            emissiveIntensity: 0.3
+        });
+        const ornament = new THREE.Mesh(ornamentGeometry, ornamentMaterial);
+        
+        // Posiciona aleatoriamente nas camadas
+        const layerIndex = Math.floor(Math.random() * layerHeights.length);
+        const layerY = (layerHeights[layerIndex] * scale * 0.5) + (layerIndex * 0.3 * scale);
+        const angle = Math.random() * Math.PI * 2;
+        const radius = (0.3 + Math.random() * 0.4) * layerRadii[layerIndex] * scale;
+        ornament.position.set(
+            Math.cos(angle) * radius,
+            layerY + (Math.random() - 0.5) * 0.3 * scale,
+            Math.sin(angle) * radius
+        );
+        ornament.castShadow = true;
+        ornament.receiveShadow = true;
+        tree.add(ornament);
+    }
+    
+    // Estrela no topo
+    const starGeometry = new THREE.ConeGeometry(0.15 * scale, 0.4 * scale, 5);
+    const starMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffd700, // Dourado
+        emissive: 0xffaa00,
+        emissiveIntensity: 0.5,
+        roughness: 0.3,
+        metalness: 0.8
+    });
+    const star = new THREE.Mesh(starGeometry, starMaterial);
+    const topHeight = layerHeights[layerHeights.length - 1] * scale + (layerHeights.length - 1) * 0.3 * scale;
+    star.position.y = topHeight + 0.2 * scale;
+    star.rotation.z = Math.PI;
+    star.castShadow = true;
+    star.receiveShadow = true;
+    tree.add(star);
     
     tree.position.set(x, 0, z);
     return tree;
 }
 
-// Adiciona árvores em posições estratégicas
-const treePositions = [
-    { x: -12, z: -8, scale: 1.2 },
-    { x: 12, z: -8, scale: 1.0 },
-    { x: -10, z: 10, scale: 0.9 },
-    { x: 10, z: 10, scale: 1.1 },
-    { x: -15, z: 0, scale: 1.0 },
-    { x: 15, z: 0, scale: 0.8 }
-];
+// Gera 10-15 árvores de Natal aleatórias ao redor da igreja
+const numTrees = 10 + Math.floor(Math.random() * 6); // 10-15 árvores
+const minRadius = 8; // Distância mínima da igreja
+const maxRadius = 40; // Distância máxima da igreja
 
-treePositions.forEach(pos => {
-    const tree = createTree(pos.x, pos.z, pos.scale);
-    treesGroup.add(tree);
-});
+for (let i = 0; i < numTrees; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = minRadius + Math.random() * (maxRadius - minRadius);
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    const scale = 0.8 + Math.random() * 0.4; // Variação de tamanho
+    
+    const tree = createChristmasTree(x, z, scale);
+    christmasTreesGroup.add(tree);
+}
 
-scene.add(treesGroup);
+scene.add(christmasTreesGroup);
 
 // Variável para armazenar o modelo
 let model = null;
@@ -1668,11 +1677,6 @@ function animate() {
     // Atualiza a grama infinita
     if (infiniteGrass) {
         infiniteGrass.update(time, camera.position);
-    }
-    
-    // Atualiza o terreno infinito
-    if (infiniteTerrain) {
-        infiniteTerrain.update(camera.position);
     }
     
     // Atualiza transição automática dia/noite
