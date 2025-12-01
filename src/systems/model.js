@@ -90,7 +90,7 @@ export function loadModel(onComplete) {
   loadingElement.classList.add("show");
 
   gltfLoader.load(
-    "/public/models/stylized_gothic_church/scene.gltf",
+    "/models/stylized_gothic_church/scene.gltf",
     (gltf) => {
       model = gltf.scene;
 
