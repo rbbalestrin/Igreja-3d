@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
 import GUI from 'lil-gui';
 
 // Cena
@@ -85,15 +86,47 @@ lights.forEach((lightData, index) => {
     lightHelpers.push(helper);
 });
 
-// Skybox - Céu
+// Skybox - Céu (será carregado com textura EXR)
 const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
-const skyMaterial = new THREE.MeshBasicMaterial({
+let skyMaterial = new THREE.MeshBasicMaterial({
     color: 0x87ceeb,
     side: THREE.BackSide, // Renderiza o interior da esfera
     fog: false
 });
 const skybox = new THREE.Mesh(skyGeometry, skyMaterial);
 scene.add(skybox);
+
+// Carrega o skybox EXR
+const exrLoader = new EXRLoader();
+exrLoader.load(
+    '/assets/skyboxes/qwantani_sunset_puresky_1k.exr',
+    (texture) => {
+        // Configura a textura
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        texture.colorSpace = THREE.LinearSRGBColorSpace;
+        
+        // Atualiza o material do skybox com a textura
+        skyMaterial = new THREE.MeshBasicMaterial({
+            map: texture,
+            side: THREE.BackSide,
+            fog: false
+        });
+        skybox.material = skyMaterial;
+        
+        // Usa a textura como environment map para iluminação baseada em imagem
+        scene.environment = texture;
+        scene.background = texture;
+        
+        console.log('Skybox EXR carregado com sucesso!');
+    },
+    (progress) => {
+        console.log('Carregando skybox...', progress);
+    },
+    (error) => {
+        console.error('Erro ao carregar skybox EXR:', error);
+        // Mantém o skybox padrão em caso de erro
+    }
+);
 
 // Terreno - Base de grama melhorado
 const terrainSize = 50;
@@ -163,9 +196,9 @@ for (let i = 0; i < 8; i++) {
     );
     const stone = new THREE.Mesh(stoneGeometry, pathMaterial);
     stone.position.set(
-        (i - 3.5) * 1.2,
+        (i - 3.5) * 1.2 - 5,
         0.05,
-        -2 + Math.random() * 0.3
+        -2 + Math.random() * 0.3 + 9.5
     );
     stone.rotation.y = Math.random() * Math.PI * 0.2;
     stone.receiveShadow = true;
@@ -273,7 +306,7 @@ const loadingElement = document.getElementById('loading');
 // Carrega o modelo
 loadingElement.classList.add('show');
 loader.load(
-    '/model/stylized_gothic_church/scene.gltf',
+    '/assets/models/stylized_gothic_church/scene.gltf',
     (gltf) => {
         model = gltf.scene;
         
@@ -535,9 +568,31 @@ function initGUI() {
     });
     
     // Controles do Skybox
-    const skyboxConfig = { cor: 0x87ceeb };
-    sceneFolder.addColor(skyboxConfig, 'cor').name('Cor do Skybox').onChange((value) => {
-        skyboxMaterial.color.setHex(value);
+    const skyboxConfig = { 
+        usarTextura: true,
+        cor: 0x87ceeb 
+    };
+    sceneFolder.add(skyboxConfig, 'usarTextura').name('Usar Skybox EXR').onChange((value) => {
+        if (value && scene.environment) {
+            // Usa a textura EXR se disponível
+            skybox.material = skyMaterial;
+            scene.background = scene.environment;
+        } else {
+            // Usa cor sólida
+            const fallbackMaterial = new THREE.MeshBasicMaterial({
+                color: skyboxConfig.cor,
+                side: THREE.BackSide,
+                fog: false
+            });
+            skybox.material = fallbackMaterial;
+            scene.background = new THREE.Color(skyboxConfig.cor);
+        }
+    });
+    sceneFolder.addColor(skyboxConfig, 'cor').name('Cor Fallback').onChange((value) => {
+        if (!skyboxConfig.usarTextura) {
+            skybox.material.color.setHex(value);
+            scene.background = new THREE.Color(value);
+        }
     });
     sceneFolder.add(skybox, 'visible').name('Mostrar Skybox');
     
