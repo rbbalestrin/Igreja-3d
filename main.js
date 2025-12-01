@@ -128,55 +128,332 @@ exrLoader.load(
     }
 );
 
-// Terreno - Base de grama melhorado
+// Terreno - Base (mantido para sombras e física)
 const terrainSize = 50;
 const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 64, 64);
 const terrainMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0x4a7c59, // Verde grama escuro
+    color: 0x4a7c59,
     roughness: 0.9,
-    metalness: 0.1
+    metalness: 0.1,
+    visible: false // Invisível, apenas para física
 });
 const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
 terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
 
-// Adiciona variação de altura ao terreno (terreno mais interessante)
-const vertices = terrainGeometry.attributes.position;
-for (let i = 0; i < vertices.count; i++) {
-    const x = vertices.getX(i);
-    const z = vertices.getZ(i);
-    // Cria um padrão de ondas suaves para o terreno
-    const distance = Math.sqrt(x * x + z * z);
-    const wave1 = Math.sin(distance * 0.2) * 0.3;
-    const wave2 = Math.sin(x * 0.3) * Math.cos(z * 0.3) * 0.2;
-    const noise = (Math.random() - 0.5) * 0.1;
-    const y = wave1 + wave2 + noise;
-    vertices.setY(i, y);
-}
-terrainGeometry.computeVertexNormals();
-
-// Adiciona patches de grama mais escura/clara para variação
-const colors = [];
-const color1 = new THREE.Color(0x4a7c59); // Verde escuro
-const color2 = new THREE.Color(0x5a8c69); // Verde médio
-const color3 = new THREE.Color(0x3a6c49); // Verde muito escuro
-
-for (let i = 0; i < vertices.count; i++) {
-    const x = vertices.getX(i);
-    const z = vertices.getZ(i);
-    // Cria padrões de cor baseados na posição
-    const pattern = Math.sin(x * 0.5) * Math.cos(z * 0.5);
-    if (pattern > 0.3) {
-        colors.push(color2.r, color2.g, color2.b);
-    } else if (pattern < -0.3) {
-        colors.push(color3.r, color3.g, color3.b);
-    } else {
-        colors.push(color1.r, color1.g, color1.b);
+// Sistema de Trilhas (GroundData)
+class GroundData {
+    constructor(size = 100) {
+        this.size = size;
+        this.trackCount = 4; // 4 trilhas (como 4 rodas, adaptado para pegadas)
+        this.trackLength = 128;
+        
+        // DataTexture para cada trilha (128x1, RGBA)
+        this.trackTextures = [];
+        for (let i = 0; i < this.trackCount; i++) {
+            const data = new Float32Array(this.trackLength * 4);
+            const texture = new THREE.DataTexture(data, this.trackLength, 1, THREE.RGBAFormat, THREE.FloatType);
+            texture.needsUpdate = true;
+            this.trackTextures.push(texture);
+        }
+        
+        // RenderTarget para o mapa de trilhas (aumenta resolução para área maior)
+        this.renderTarget = new THREE.WebGLRenderTarget(1024, 1024, {
+            format: THREE.RGBAFormat,
+            type: THREE.FloatType
+        });
+        
+        // Cena separada para renderizar trilhas
+        this.trackScene = new THREE.Scene();
+        this.trackCamera = new THREE.OrthographicCamera(-size/2, size/2, size/2, -size/2, 0.1, 100);
+        this.trackCamera.position.set(0, 10, 0);
+        this.trackCamera.lookAt(0, 0, 0);
+    }
+    
+    addTrackPoint(trackIndex, position) {
+        if (trackIndex >= this.trackCount) return;
+        
+        const texture = this.trackTextures[trackIndex];
+        const data = texture.image.data;
+        
+        // Move todos os pontos uma posição à direita
+        for (let i = (this.trackLength - 1) * 4; i >= 4; i -= 4) {
+            data[i] = data[i - 4];     // R = X
+            data[i + 1] = data[i - 3]; // G = Y
+            data[i + 2] = data[i - 2]; // Z
+            data[i + 3] = data[i - 1]; // A
+        }
+        
+        // Adiciona novo ponto no início
+        data[0] = position.x;
+        data[1] = position.y;
+        data[2] = position.z;
+        data[3] = 1.0; // Alpha = 1 quando toca o solo
+        
+        texture.needsUpdate = true;
+    }
+    
+    update(renderer) {
+        // Renderiza as trilhas no RenderTarget
+        renderer.setRenderTarget(this.renderTarget);
+        renderer.render(this.trackScene, this.trackCamera);
+        renderer.setRenderTarget(null);
+    }
+    
+    getTrackTexture() {
+        return this.renderTarget.texture;
     }
 }
-terrainGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-terrainMaterial.vertexColors = true;
+
+const groundData = new GroundData(100);
+
+// Sistema de Grama Infinita
+class InfiniteGrass {
+    constructor(count = 50000, size = 50) {
+        this.count = count;
+        this.size = size;
+        this.bladeSize = 0.3;
+        this.grassGeometry = null;
+        this.grassMaterial = null;
+        this.grassMesh = null;
+        this.centers = [];
+        
+        this.init();
+    }
+    
+    init() {
+        const positions = [];
+        const centers = [];
+        const ids = [];
+        const heights = [];
+        const widths = [];
+        const indices = [];
+        
+        // Gera blades de grama em uma área maior com margem de segurança
+        const margin = this.size * 0.2; // 20% de margem extra
+        const totalSize = this.size + margin * 2;
+        
+        for (let i = 0; i < this.count; i++) {
+            // Gera em uma área maior para garantir cobertura
+            const x = (Math.random() - 0.5) * totalSize;
+            const z = (Math.random() - 0.5) * totalSize;
+            const center = new THREE.Vector3(x, 0, z);
+            this.centers.push(center);
+            
+            const height = 0.3 + Math.random() * 0.2;
+            const width = 0.02 + Math.random() * 0.01;
+            
+            // Cada blade é um triângulo simples (3 vértices)
+            const baseY = 0;
+            const topY = height;
+            
+            // Vértice 1: base esquerda
+            positions.push(-width, baseY, 0);
+            centers.push(x, 0, z);
+            ids.push(i);
+            heights.push(height);
+            widths.push(width);
+            
+            // Vértice 2: topo
+            positions.push(0, topY, 0);
+            centers.push(x, 0, z);
+            ids.push(i);
+            heights.push(height);
+            widths.push(width);
+            
+            // Vértice 3: base direita
+            positions.push(width, baseY, 0);
+            centers.push(x, 0, z);
+            ids.push(i);
+            heights.push(height);
+            widths.push(width);
+            
+            // Índices do triângulo
+            const baseIndex = i * 3;
+            indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
+        }
+        
+        // Cria geometria
+        this.grassGeometry = new THREE.BufferGeometry();
+        this.grassGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        this.grassGeometry.setAttribute('center', new THREE.Float32BufferAttribute(centers, 3));
+        this.grassGeometry.setAttribute('id', new THREE.Float32BufferAttribute(ids, 1));
+        this.grassGeometry.setAttribute('height', new THREE.Float32BufferAttribute(heights, 1));
+        this.grassGeometry.setAttribute('width', new THREE.Float32BufferAttribute(widths, 1));
+        this.grassGeometry.setIndex(indices);
+        
+        // Carrega shaders inline (mais confiável)
+        this.loadDefaultShaders();
+    }
+    
+    loadDefaultShaders() {
+        // Shaders inline como fallback
+        const vertexShader = `
+            uniform float time;
+            uniform vec3 uCameraPosition;
+            uniform sampler2D trackTexture;
+            attribute vec3 center;
+            attribute float id;
+            attribute float height;
+            attribute float width;
+            varying vec3 vColor;
+            varying float vTipness;
+            varying float vTrackInfluence;
+            varying vec3 vNormal;
+            
+            float random(vec2 st) {
+                return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+            }
+            
+            float noise(vec2 st) {
+                vec2 i = floor(st);
+                vec2 f = fract(st);
+                float a = random(i);
+                float b = random(i + vec2(1.0, 0.0));
+                float c = random(i + vec2(0.0, 1.0));
+                float d = random(i + vec2(1.0, 1.0));
+                vec2 u = f * f * (3.0 - 2.0 * f);
+                return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+            }
+            
+            vec3 getWind(vec2 pos, float time) {
+                float windStrength = 0.15;
+                float windFrequency1 = 0.5;
+                float windFrequency2 = 1.5;
+                vec2 windDirection = vec2(1.0, 0.0);
+                vec2 windPos1 = pos * windFrequency1 + windDirection * time * 0.5;
+                vec2 windPos2 = pos * windFrequency2 + windDirection * time * 0.3;
+                float wind1 = noise(windPos1) * windStrength;
+                float wind2 = noise(windPos2) * windStrength * 0.5;
+                return vec3(wind1 + wind2, 0.0, 0.0);
+            }
+            
+            void main() {
+                vTipness = float(gl_VertexID % 3) / 2.0;
+                vec3 localPos = position;
+                vec3 wind = getWind(center.xz, time);
+                localPos += wind * vTipness;
+                vec3 toCamera = normalize(uCameraPosition - center);
+                vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), toCamera));
+                vec3 up = cross(toCamera, right);
+                vec3 billboardPos = localPos.x * right + localPos.y * up;
+                vec3 worldPos = center + billboardPos;
+                vec2 trackUV = (worldPos.xz + 50.0) / 100.0;
+                vec4 trackData = texture2D(trackTexture, trackUV);
+                vTrackInfluence = trackData.a;
+                float trackBend = vTrackInfluence * 0.3;
+                worldPos.y -= trackBend * vTipness;
+                float grassGreen = 0.3 + vTipness * 0.2;
+                grassGreen -= vTrackInfluence * 0.1;
+                vColor = vec3(0.1, grassGreen, 0.05);
+                
+                // Calcula normal para o fragment shader
+                vNormal = normalize(normalMatrix * up);
+                
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(worldPos, 1.0);
+            }
+        `;
+        
+        const fragmentShader = `
+            uniform sampler2D matcapTexture;
+            varying vec3 vColor;
+            varying float vTipness;
+            varying float vTrackInfluence;
+            varying vec3 vNormal;
+            
+            void main() {
+                vec3 grassColor = vColor;
+                grassColor = mix(grassColor * 0.7, grassColor * 1.2, vTipness);
+                grassColor *= (1.0 - vTrackInfluence * 0.3);
+                
+                // Usa a normal passada do vertex shader
+                vec2 matcapUV = vNormal.xy * 0.5 + 0.5;
+                vec3 matcap = texture2D(matcapTexture, matcapUV).rgb;
+                vec3 finalColor = grassColor * (0.7 + matcap * 0.3);
+                
+                float alpha = 1.0;
+                alpha *= (1.0 - vTrackInfluence * 0.5);
+                gl_FragColor = vec4(finalColor, alpha);
+            }
+        `;
+        
+        // Cria MatCap texture
+        const matcapSize = 256;
+        const matcapData = new Uint8Array(matcapSize * matcapSize * 4);
+        for (let i = 0; i < matcapSize * matcapSize; i++) {
+            const x = (i % matcapSize) / matcapSize;
+            const y = Math.floor(i / matcapSize) / matcapSize;
+            const r = Math.sqrt((x - 0.5) ** 2 + (y - 0.5) ** 2);
+            const intensity = Math.max(0, 1 - r * 2);
+            matcapData[i * 4] = 128 + intensity * 127;
+            matcapData[i * 4 + 1] = 128 + intensity * 127;
+            matcapData[i * 4 + 2] = 128 + intensity * 127;
+            matcapData[i * 4 + 3] = 255;
+        }
+        const matcapTexture = new THREE.DataTexture(matcapData, matcapSize, matcapSize, THREE.RGBAFormat);
+        matcapTexture.needsUpdate = true;
+        
+        this.grassMaterial = new THREE.ShaderMaterial({
+            vertexShader,
+            fragmentShader,
+            uniforms: {
+                time: { value: 0 },
+                uCameraPosition: { value: camera.position },
+                trackTexture: { value: groundData.getTrackTexture() },
+                grassDensity: { value: 1.0 },
+                windDirection: { value: new THREE.Vector2(1, 0) },
+                matcapTexture: { value: matcapTexture }
+            },
+            side: THREE.DoubleSide,
+            transparent: true,
+            alphaTest: 0.1
+        });
+        
+        this.grassMesh = new THREE.Mesh(this.grassGeometry, this.grassMaterial);
+        this.grassMesh.frustumCulled = false;
+        scene.add(this.grassMesh);
+    }
+    
+    update(time, cameraPos) {
+        if (this.grassMaterial) {
+            this.grassMaterial.uniforms.time.value = time;
+            this.grassMaterial.uniforms.uCameraPosition.value.copy(cameraPos);
+            this.grassMaterial.uniforms.trackTexture.value = groundData.getTrackTexture();
+            
+            // Reposiciona blades que saíram dos limites (infinite tiling)
+            // Usa uma área maior para garantir cobertura contínua
+            const margin = this.size * 0.2;
+            const halfSize = (this.size + margin * 2) / 2;
+            const tileSize = this.size + margin * 2;
+            
+            this.centers.forEach((center, i) => {
+                const dx = cameraPos.x - center.x;
+                const dz = cameraPos.z - center.z;
+                
+                // Reposiciona quando sai da área visível
+                if (Math.abs(dx) > halfSize) {
+                    const offset = Math.sign(dx) * tileSize;
+                    center.x += offset;
+                }
+                if (Math.abs(dz) > halfSize) {
+                    const offset = Math.sign(dz) * tileSize;
+                    center.z += offset;
+                }
+                
+                // Atualiza atributos
+                const baseIndex = i * 3;
+                for (let j = 0; j < 3; j++) {
+                    this.grassGeometry.attributes.center.setXYZ(baseIndex + j, center.x, center.y, center.z);
+                }
+            });
+            this.grassGeometry.attributes.center.needsUpdate = true;
+        }
+    }
+}
+
+// Aumenta a área de grama para cobrir mais espaço e adiciona mais blades
+const infiniteGrass = new InfiniteGrass(100000, 100);
 
 // Caminho de pedras em frente à igreja
 const pathGroup = new THREE.Group();
@@ -536,13 +813,30 @@ function initGUI() {
     
     // Controles do Terreno
     const terrainFolder = gui.addFolder('Terreno');
-    const terrainColor = { cor: 0x4a7c59 };
-    terrainFolder.addColor(terrainColor, 'cor').name('Cor da Grama').onChange((value) => {
-        terrainMaterial.color.setHex(value);
-    });
-    terrainFolder.add(terrainMaterial, 'roughness', 0, 1, 0.1).name('Rugosidade');
-    terrainFolder.add(terrainMaterial, 'metalness', 0, 1, 0.1).name('Metalicidade');
-    terrainFolder.add(terrain, 'visible').name('Visível');
+    terrainFolder.add(terrain, 'visible').name('Mostrar Base (Física)');
+    
+    // Controles da Grama Infinita
+    const grassFolder = gui.addFolder('Grama Infinita');
+    if (infiniteGrass && infiniteGrass.grassMesh) {
+        grassFolder.add(infiniteGrass.grassMesh, 'visible').name('Visível');
+        if (infiniteGrass.grassMaterial) {
+            grassFolder.add(infiniteGrass.grassMaterial.uniforms.grassDensity, 'value', 0.1, 2.0, 0.1).name('Densidade');
+            grassFolder.add(infiniteGrass.grassMaterial.uniforms.windDirection.value, 'x', -2, 2, 0.1).name('Direção Vento X');
+            grassFolder.add(infiniteGrass.grassMaterial.uniforms.windDirection.value, 'y', -2, 2, 0.1).name('Direção Vento Z');
+        }
+    }
+    
+    // Controles de Trilhas
+    const tracksFolder = gui.addFolder('Trilhas');
+    tracksFolder.add({
+        limparTrilhas: () => {
+            for (let i = 0; i < groundData.trackCount; i++) {
+                const data = groundData.trackTextures[i].image.data;
+                data.fill(0);
+                groundData.trackTextures[i].needsUpdate = true;
+            }
+        }
+    }, 'limparTrilhas').name('Limpar Trilhas');
     
     // Controles do Caminho
     const pathFolder = gui.addFolder('Caminho');
@@ -633,9 +927,15 @@ function initGUI() {
     }, 'resetModel').name('Resetar Modelo');
 }
 
+// Variável para rastrear posição anterior da câmera (para criar trilhas)
+let lastCameraPosition = new THREE.Vector3();
+let trackCounter = 0;
+
 // Animação
 function animate() {
     requestAnimationFrame(animate);
+    
+    const time = performance.now() * 0.001;
     
     // Atualiza os controles
     controls.update();
@@ -644,6 +944,32 @@ function animate() {
     lightHelpers.forEach(helper => {
         helper.update();
     });
+    
+    // Cria trilhas baseadas no movimento da câmera (simula pegadas)
+    const cameraPos = camera.position.clone();
+    cameraPos.y = 0; // Projeta no chão
+    
+    if (lastCameraPosition.distanceTo(cameraPos) > 0.5) {
+        // Adiciona ponto de trilha a cada 0.5 unidades de movimento
+        for (let i = 0; i < 4; i++) {
+            const offset = new THREE.Vector3(
+                (i % 2 - 0.5) * 0.3, // Offset lateral
+                0,
+                Math.floor(i / 2) * 0.2 // Offset frontal
+            );
+            const trackPos = cameraPos.clone().add(offset);
+            groundData.addTrackPoint(i, trackPos);
+        }
+        lastCameraPosition.copy(cameraPos);
+    }
+    
+    // Atualiza o sistema de trilhas
+    groundData.update(renderer);
+    
+    // Atualiza a grama infinita
+    if (infiniteGrass) {
+        infiniteGrass.update(time, camera.position);
+    }
     
     // Renderiza a cena
     renderer.render(scene, camera);
