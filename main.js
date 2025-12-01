@@ -1,60 +1,95 @@
+/**
+ * =============================================================================
+ * IGREJA GÓTICA - CENA NATALINA 3D
+ * =============================================================================
+ * Projeto acadêmico de Computação Gráfica usando Three.js
+ * 
+ * Técnicas implementadas:
+ * - SpotLights com show de luzes animado
+ * - Skybox com transição dia/noite
+ * - Fog (neblina) atmosférica
+ * - Multi-textura e Environment Mapping
+ * - Filtro anisotrópico
+ * - Sistema de grama com shaders customizados
+ * - Decorações natalinas procedurais
+ * =============================================================================
+ */
+
+// #############################################################################
+// # SEÇÃO 1: IMPORTS E CONFIGURAÇÕES INICIAIS
+// #############################################################################
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
 import GUI from 'lil-gui';
 
-// Cena
+// -----------------------------------------------------------------------------
+// Cena Principal
+// -----------------------------------------------------------------------------
 const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x87ceeb, 0.015); // Neblina azul clara
 
-// Fog - Neblina para adicionar atmosfera
-scene.fog = new THREE.FogExp2(0x87ceeb, 0.015); // Cor azul claro, densidade baixa
-
+// -----------------------------------------------------------------------------
 // Câmera
+// -----------------------------------------------------------------------------
 const camera = new THREE.PerspectiveCamera(
-    50, // Campo de visão
-    window.innerWidth / window.innerHeight, // Aspect ratio
-    0.1, // Near plane
-    1000 // Far plane
+    50,                                          // Campo de visão (FOV)
+    window.innerWidth / window.innerHeight,      // Aspect ratio
+    0.1,                                         // Near plane
+    1000                                         // Far plane
 );
-camera.position.set(1, 1, 5);
+camera.position.set(1, 1, 1);
 camera.lookAt(0, 0, 0);
 
+// -----------------------------------------------------------------------------
 // Renderer
+// -----------------------------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-// OrbitControls - para controlar a câmera com mouse
+// -----------------------------------------------------------------------------
+// Controles de Órbita (mouse/touch)
+// -----------------------------------------------------------------------------
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; // Suaviza o movimento
+controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.minDistance = 2;
 controls.maxDistance = 50;
 
-// Iluminação
+
+// #############################################################################
+// # SEÇÃO 2: SISTEMA DE ILUMINAÇÃO
+// #############################################################################
+
+// -----------------------------------------------------------------------------
+// Luz Ambiente (iluminação global suave)
+// -----------------------------------------------------------------------------
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.1);
 scene.add(ambientLight);
 
-// Luz de Hemisfério (ilumina de cima para baixo com cores diferentes)
+// -----------------------------------------------------------------------------
+// Luz de Hemisfério (céu/solo)
+// -----------------------------------------------------------------------------
 const hemisphereLight = new THREE.HemisphereLight(
-    0x87ceeb, // Cor do céu (azul claro)
-    0x4a7c59, // Cor do solo (verde grama)
-    0.3 // Intensidade inicial baixa para destacar as luzes pontuais
+    0x87ceeb,   // Cor do céu (azul claro)
+    0x4a7c59,   // Cor do solo (verde grama)
+    0.3         // Intensidade
 );
 hemisphereLight.position.set(0, 50, 0);
 scene.add(hemisphereLight);
 
-// ============================================
-// TÉCNICA: SpotLights - Show de Luzes
-// Holofotes coloridos que iluminam a igreja
-// ============================================
+// -----------------------------------------------------------------------------
+// SpotLights - Show de Luzes
+// -----------------------------------------------------------------------------
 
+// Arrays para armazenar luzes e helpers
 const lights = [];
 const lightHelpers = [];
-const spotTargets = []; // Alvos para os spotlights
 
 // Configurações do show de luzes
 const lightShowConfig = {
@@ -65,7 +100,7 @@ const lightShowConfig = {
     colorChangeEnabled: true
 };
 
-// Cores do show de luzes (RGB vibrantes)
+// Paleta de cores vibrantes para o show
 const showColors = [
     new THREE.Color(0xff0066), // Rosa
     new THREE.Color(0x00ff66), // Verde
@@ -77,121 +112,59 @@ const showColors = [
     new THREE.Color(0x0066ff)  // Azul
 ];
 
-// Cria target para os spotlights (ponto que a luz aponta)
+// Target central para os spotlights
 const churchTarget = new THREE.Object3D();
-churchTarget.position.set(0, 2, 0); // Centro da igreja
+churchTarget.position.set(0, 2, 0);
 scene.add(churchTarget);
 
-// Spotlight 1 - Frontal Esquerda (Rosa/Magenta)
-const spot1 = new THREE.SpotLight(0xff0066, 50, 50, Math.PI / 6, 0.5, 1);
-spot1.position.set(-8, 10, 8);
-spot1.target = churchTarget;
-spot1.castShadow = true;
-spot1.shadow.mapSize.width = 2048;
-spot1.shadow.mapSize.height = 2048;
-scene.add(spot1);
-lights.push({ 
-    name: 'Holofote 1 (Frontal Esq)', 
-    light: spot1, 
-    color: 0xff0066,
-    baseAngle: 0,
-    colorIndex: 0
-});
+// Função auxiliar para criar spotlight
+function createSpotLight(color, position, baseAngle, colorIndex, isTop = false) {
+    const intensity = isTop ? 30 : 50;
+    const distance = isTop ? 60 : 50;
+    const angle = isTop ? Math.PI / 4 : Math.PI / 6;
+    const penumbra = isTop ? 0.3 : 0.5;
+    
+    const spot = new THREE.SpotLight(color, intensity, distance, angle, penumbra, 1);
+    spot.position.set(position.x, position.y, position.z);
+    spot.target = churchTarget;
+    spot.castShadow = true;
+    
+    if (!isTop) {
+        spot.shadow.mapSize.width = 2048;
+        spot.shadow.mapSize.height = 2048;
+    }
+    
+    scene.add(spot);
+    
+    return {
+        light: spot,
+        color: color,
+        baseAngle: baseAngle,
+        colorIndex: colorIndex,
+        isTop: isTop
+    };
+}
 
-// Spotlight 2 - Frontal Direita (Verde/Ciano)
-const spot2 = new THREE.SpotLight(0x00ff66, 50, 50, Math.PI / 6, 0.5, 1);
-spot2.position.set(8, 10, 8);
-spot2.target = churchTarget;
-spot2.castShadow = true;
-scene.add(spot2);
-lights.push({ 
-    name: 'Holofote 2 (Frontal Dir)', 
-    light: spot2, 
-    color: 0x00ff66,
-    baseAngle: Math.PI / 2,
-    colorIndex: 2
-});
+// Criar os 7 spotlights
+lights.push(createSpotLight(0xff0066, { x: -8, y: 10, z: 8 }, 0, 0));              // Frontal Esquerda
+lights.push(createSpotLight(0x00ff66, { x: 8, y: 10, z: 8 }, Math.PI / 2, 2));     // Frontal Direita
+lights.push(createSpotLight(0x6600ff, { x: -8, y: 10, z: -8 }, Math.PI, 4));       // Traseira Esquerda
+lights.push(createSpotLight(0xff6600, { x: 8, y: 10, z: -8 }, Math.PI * 1.5, 6));  // Traseira Direita
+lights.push(createSpotLight(0xffffff, { x: 0, y: 15, z: 0 }, 0, 0, true));         // Topo
+lights.push(createSpotLight(0x00ffff, { x: -12, y: 8, z: 0 }, Math.PI * 0.75, 1)); // Lateral Esquerda
+lights.push(createSpotLight(0xffff00, { x: 12, y: 8, z: 0 }, Math.PI * 1.25, 3));  // Lateral Direita
 
-// Spotlight 3 - Traseira Esquerda (Roxo/Azul)
-const spot3 = new THREE.SpotLight(0x6600ff, 50, 50, Math.PI / 6, 0.5, 1);
-spot3.position.set(-8, 10, -8);
-spot3.target = churchTarget;
-spot3.castShadow = true;
-scene.add(spot3);
-lights.push({ 
-    name: 'Holofote 3 (Traseira Esq)', 
-    light: spot3, 
-    color: 0x6600ff,
-    baseAngle: Math.PI,
-    colorIndex: 4
-});
-
-// Spotlight 4 - Traseira Direita (Laranja/Amarelo)
-const spot4 = new THREE.SpotLight(0xff6600, 50, 50, Math.PI / 6, 0.5, 1);
-spot4.position.set(8, 10, -8);
-spot4.target = churchTarget;
-spot4.castShadow = true;
-scene.add(spot4);
-lights.push({ 
-    name: 'Holofote 4 (Traseira Dir)', 
-    light: spot4, 
-    color: 0xff6600,
-    baseAngle: Math.PI * 1.5,
-    colorIndex: 6
-});
-
-// Spotlight 5 - Topo (Branco/Multi)
-const spot5 = new THREE.SpotLight(0xffffff, 30, 60, Math.PI / 4, 0.3, 1);
-spot5.position.set(0, 15, 0);
-spot5.target = churchTarget;
-spot5.castShadow = true;
-scene.add(spot5);
-lights.push({ 
-    name: 'Holofote 5 (Topo)', 
-    light: spot5, 
-    color: 0xffffff,
-    baseAngle: 0,
-    colorIndex: 0,
-    isTop: true
-});
-
-// Spotlight 6 - Lateral Esquerda (Ciano)
-const spot6 = new THREE.SpotLight(0x00ffff, 40, 50, Math.PI / 5, 0.4, 1);
-spot6.position.set(-12, 8, 0);
-spot6.target = churchTarget;
-spot6.castShadow = true;
-scene.add(spot6);
-lights.push({ 
-    name: 'Holofote 6 (Lateral Esq)', 
-    light: spot6, 
-    color: 0x00ffff,
-    baseAngle: Math.PI * 0.75,
-    colorIndex: 1
-});
-
-// Spotlight 7 - Lateral Direita (Amarelo)
-const spot7 = new THREE.SpotLight(0xffff00, 40, 50, Math.PI / 5, 0.4, 1);
-spot7.position.set(12, 8, 0);
-spot7.target = churchTarget;
-spot7.castShadow = true;
-scene.add(spot7);
-lights.push({ 
-    name: 'Holofote 7 (Lateral Dir)', 
-    light: spot7, 
-    color: 0xffff00,
-    baseAngle: Math.PI * 1.25,
-    colorIndex: 3
-});
-
-// Helpers visuais para os spotlights
-lights.forEach((lightData, index) => {
+// Criar helpers visuais (ocultos por padrão)
+lights.forEach((lightData) => {
     const helper = new THREE.SpotLightHelper(lightData.light, lightData.color);
-    helper.visible = false; // Esconde por padrão para não poluir a visualização
+    helper.visible = false;
     scene.add(helper);
     lightHelpers.push(helper);
 });
 
-// Função para atualizar o show de luzes
+// -----------------------------------------------------------------------------
+// Função de Atualização do Show de Luzes
+// -----------------------------------------------------------------------------
 function updateLightShow(time) {
     if (!lightShowConfig.enabled) return;
     
@@ -201,28 +174,24 @@ function updateLightShow(time) {
     lights.forEach((lightData, index) => {
         const light = lightData.light;
         
-        // Animação de movimento (posição orbital)
+        // Movimento orbital (exceto luz do topo)
         if (lightShowConfig.movementEnabled && !lightData.isTop) {
             const radius = 10;
             const height = 8 + Math.sin(time * speed + lightData.baseAngle) * 2;
             const angle = lightData.baseAngle + Math.sin(time * speed * 0.5) * 0.5;
             
-            // Movimento suave orbital
             light.position.x = Math.cos(angle + time * speed * 0.3) * radius;
             light.position.z = Math.sin(angle + time * speed * 0.3) * radius;
             light.position.y = height;
         }
         
-        // Animação de cor
+        // Transição de cores
         if (lightShowConfig.colorChangeEnabled) {
             const colorIndex = (lightData.colorIndex + Math.floor(time * colorSpeed)) % showColors.length;
             const nextColorIndex = (colorIndex + 1) % showColors.length;
             const t = (time * colorSpeed) % 1;
             
-            // Interpolação suave entre cores
-            const currentColor = showColors[colorIndex];
-            const nextColor = showColors[nextColorIndex];
-            light.color.lerpColors(currentColor, nextColor, t);
+            light.color.lerpColors(showColors[colorIndex], showColors[nextColorIndex], t);
         }
         
         // Pulsação de intensidade
@@ -230,30 +199,36 @@ function updateLightShow(time) {
         light.intensity = baseIntensity + Math.sin(time * speed * 2 + index) * 15;
     });
     
-    // Atualiza helpers
+    // Atualizar helpers visíveis
     lightHelpers.forEach(helper => {
         if (helper.visible) helper.update();
     });
 }
 
-// ============================================
-// TÉCNICA: Modo Dia/Noite
-// Sistema de transição entre skyboxes diurno e noturno
-// ============================================
 
+// #############################################################################
+// # SEÇÃO 3: SISTEMA DE CÉU (SKYBOX + DIA/NOITE)
+// #############################################################################
+
+// -----------------------------------------------------------------------------
+// Configurações do Sistema Dia/Noite
+// -----------------------------------------------------------------------------
 const dayNightConfig = {
-    mode: 'day', // 'day' ou 'night'
-    transitionTime: 3.0, // Tempo de transição em segundos
-    autoTransition: false, // Transição automática
-    autoTransitionSpeed: 0.1 // Velocidade da transição automática
+    mode: 'day',
+    transitionTime: 3.0,
+    autoTransition: false,
+    autoTransitionSpeed: 0.1
 };
 
-let dayNightBlend = 0.0; // 0 = dia, 1 = noite
+// Variáveis de estado
+let dayNightBlend = 0.0;  // 0 = dia, 1 = noite
 let dayTexture = null;
 let nightTexture = null;
 let isTransitioning = false;
 
-// Skybox - Céu (será carregado com texturas)
+// -----------------------------------------------------------------------------
+// Skybox Base
+// -----------------------------------------------------------------------------
 const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
 let skyMaterial = new THREE.MeshBasicMaterial({
     color: 0x87ceeb,
@@ -263,38 +238,27 @@ let skyMaterial = new THREE.MeshBasicMaterial({
 const skybox = new THREE.Mesh(skyGeometry, skyMaterial);
 scene.add(skybox);
 
-// Carrega o skybox do dia (EXR)
+// -----------------------------------------------------------------------------
+// Carregamento da Textura do Dia (EXR)
+// -----------------------------------------------------------------------------
 const exrLoader = new EXRLoader();
 exrLoader.load(
     '/assets/skyboxes/qwantani_sunset_puresky_1k.exr',
     (texture) => {
-        console.log('[DIA/NOITE] Skybox dia carregado com sucesso');
+        console.log('[DIA/NOITE] Skybox dia carregado');
         texture.mapping = THREE.EquirectangularReflectionMapping;
         texture.colorSpace = THREE.LinearSRGBColorSpace;
         texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
         dayTexture = texture;
-        
-        console.log('[DIA/NOITE] dayTexture definida:', !!dayTexture);
-        console.log('[DIA/NOITE] nightTexture atual:', !!nightTexture);
-        
-        // Se ainda não temos a textura da noite, usa a do dia
-        if (!nightTexture) {
-            console.log('[DIA/NOITE] Atualizando skybox apenas com textura do dia');
-            updateSkybox();
-        } else {
-            console.log('[DIA/NOITE] Ambas texturas carregadas, atualizando skybox');
-            updateSkybox();
-        }
+        updateSkybox();
     },
-    (progress) => {
-        console.log('[DIA/NOITE] Carregando skybox dia...', progress);
-    },
-    (error) => {
-        console.error('[DIA/NOITE] Erro ao carregar skybox dia:', error);
-    }
+    null,
+    (error) => console.error('[DIA/NOITE] Erro ao carregar skybox dia:', error)
 );
 
-// Carrega o skybox da noite (Galáxia) - usa o loader existente
+// -----------------------------------------------------------------------------
+// Carregamento da Textura da Noite (GLTF)
+// -----------------------------------------------------------------------------
 const nightSkyboxLoader = new GLTFLoader();
 nightSkyboxLoader.load(
     '/assets/inside_galaxy_skybox_hdri_360_panorama/scene.gltf',
@@ -302,27 +266,9 @@ nightSkyboxLoader.load(
         console.log('[DIA/NOITE] Modelo GLTF da noite carregado');
         let textureFound = false;
         
-        // Extrai a textura do modelo
         gltf.scene.traverse((child) => {
             if (child.isMesh && child.material) {
-                console.log('[DIA/NOITE] Mesh encontrado, material:', child.material.type);
-                
-                // Tenta encontrar textura em diferentes propriedades
-                let texture = null;
-                if (child.material.map) {
-                    texture = child.material.map;
-                    console.log('[DIA/NOITE] Textura encontrada em .map');
-                } else if (child.material.emissiveMap) {
-                    texture = child.material.emissiveMap;
-                    console.log('[DIA/NOITE] Textura encontrada em .emissiveMap');
-                } else if (Array.isArray(child.material)) {
-                    child.material.forEach((mat, idx) => {
-                        if (mat.map) {
-                            texture = mat.map;
-                            console.log(`[DIA/NOITE] Textura encontrada em material[${idx}].map`);
-                        }
-                    });
-                }
+                let texture = child.material.map || child.material.emissiveMap;
                 
                 if (texture) {
                     const clonedTexture = texture.clone();
@@ -331,35 +277,32 @@ nightSkyboxLoader.load(
                     clonedTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
                     nightTexture = clonedTexture;
                     textureFound = true;
-                    console.log('[DIA/NOITE] Skybox noite configurado com textura do modelo');
                 }
             }
         });
         
         if (!textureFound) {
-            console.warn('[DIA/NOITE] Nenhuma textura encontrada no modelo, criando textura procedural');
             createProceduralNightTexture();
         }
-        
-        console.log('[DIA/NOITE] dayTexture:', !!dayTexture, 'nightTexture:', !!nightTexture);
         updateSkybox();
     },
-    (progress) => {
-        console.log('[DIA/NOITE] Carregando skybox noite...', progress);
-    },
+    null,
     (error) => {
         console.error('[DIA/NOITE] Erro ao carregar skybox noite:', error);
-        console.log('[DIA/NOITE] Criando textura procedural como fallback');
         createProceduralNightTexture();
     }
 );
 
-// Função auxiliar para criar textura procedural da noite
+// -----------------------------------------------------------------------------
+// Textura Procedural da Noite (Fallback)
+// -----------------------------------------------------------------------------
 function createProceduralNightTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
     canvas.height = 512;
     const ctx = canvas.getContext('2d');
+    
+    // Gradiente do céu noturno
     const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
     gradient.addColorStop(0, '#000011');
     gradient.addColorStop(0.5, '#000033');
@@ -367,7 +310,7 @@ function createProceduralNightTexture() {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Adiciona estrelas
+    // Estrelas
     for (let i = 0; i < 500; i++) {
         const x = Math.random() * canvas.width;
         const y = Math.random() * canvas.height;
@@ -381,23 +324,17 @@ function createProceduralNightTexture() {
     nightTexture = new THREE.CanvasTexture(canvas);
     nightTexture.mapping = THREE.EquirectangularReflectionMapping;
     nightTexture.colorSpace = THREE.LinearSRGBColorSpace;
-    console.log('[DIA/NOITE] Textura procedural da noite criada');
     updateSkybox();
 }
 
-// Função para atualizar o skybox com blend entre dia e noite
+// -----------------------------------------------------------------------------
+// Atualização do Skybox (Blend Dia/Noite)
+// -----------------------------------------------------------------------------
 function updateSkybox() {
-    console.log('[DIA/NOITE] updateSkybox() chamado');
-    console.log('[DIA/NOITE] dayTexture:', !!dayTexture, 'nightTexture:', !!nightTexture, 'blend:', dayNightBlend);
-    
-    if (!dayTexture && !nightTexture) {
-        console.warn('[DIA/NOITE] Nenhuma textura disponível!');
-        return;
-    }
+    if (!dayTexture && !nightTexture) return;
     
     if (dayTexture && nightTexture) {
-        console.log('[DIA/NOITE] Criando material com blend entre dia e noite');
-        // Usa shader customizado para blend entre as duas texturas
+        // Shader customizado para blend entre texturas
         const blendMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 dayTexture: { value: dayTexture },
@@ -418,18 +355,16 @@ function updateSkybox() {
                 uniform float blend;
                 varying vec3 vWorldPosition;
                 
-                vec3 equirectangularUV(vec3 dir) {
-                    float u = atan(dir.z, dir.x) / (2.0 * 3.14159265359) + 0.5;
-                    float v = acos(dir.y) / 3.14159265359;
-                    return vec3(u, v, 0.0);
-                }
-                
                 void main() {
                     vec3 dir = normalize(vWorldPosition);
-                    vec2 uv = equirectangularUV(dir).xy;
+                    float u = atan(dir.z, dir.x) / (2.0 * 3.14159265359) + 0.5;
+                    float v = acos(dir.y) / 3.14159265359;
+                    vec2 uv = vec2(u, v);
+                    
                     vec3 dayColor = texture2D(dayTexture, uv).rgb;
                     vec3 nightColor = texture2D(nightTexture, uv).rgb;
                     vec3 finalColor = mix(dayColor, nightColor, blend);
+                    
                     gl_FragColor = vec4(finalColor, 1.0);
                 }
             `,
@@ -437,68 +372,33 @@ function updateSkybox() {
             fog: false
         });
         skybox.material = blendMaterial;
-        console.log('[DIA/NOITE] Material de blend aplicado ao skybox');
         
-        // Atualiza environment map (interpola entre os dois)
-        if (dayNightBlend < 0.5) {
-            scene.environment = dayTexture;
-            scene.background = dayTexture;
-            console.log('[DIA/NOITE] Usando environment map do dia');
-        } else {
-            scene.environment = nightTexture;
-            scene.background = nightTexture;
-            console.log('[DIA/NOITE] Usando environment map da noite');
-        }
-    } else if (dayTexture) {
-        console.log('[DIA/NOITE] Usando apenas textura do dia');
+        // Environment map baseado no blend
+        scene.environment = dayNightBlend < 0.5 ? dayTexture : nightTexture;
+        scene.background = scene.environment;
+    } else {
+        const texture = dayTexture || nightTexture;
         skyMaterial = new THREE.MeshBasicMaterial({
-            map: dayTexture,
+            map: texture,
             side: THREE.BackSide,
             fog: false
         });
         skybox.material = skyMaterial;
-        scene.environment = dayTexture;
-        scene.background = dayTexture;
-    } else if (nightTexture) {
-        console.log('[DIA/NOITE] Usando apenas textura da noite');
-        skyMaterial = new THREE.MeshBasicMaterial({
-            map: nightTexture,
-            side: THREE.BackSide,
-            fog: false
-        });
-        skybox.material = skyMaterial;
-        scene.environment = nightTexture;
-        scene.background = nightTexture;
+        scene.environment = texture;
+        scene.background = texture;
     }
 }
 
-// Função para transicionar entre dia e noite
+// -----------------------------------------------------------------------------
+// Transição Suave Dia/Noite
+// -----------------------------------------------------------------------------
 function transitionDayNight(targetMode, duration = null) {
-    console.log('[DIA/NOITE] transitionDayNight() chamado:', targetMode);
-    console.log('[DIA/NOITE] isTransitioning:', isTransitioning);
-    console.log('[DIA/NOITE] dayTexture:', !!dayTexture, 'nightTexture:', !!nightTexture);
-    
-    if (isTransitioning) {
-        console.warn('[DIA/NOITE] Transição já em andamento, ignorando');
-        return;
-    }
-    
-    if (!dayTexture && !nightTexture) {
-        console.error('[DIA/NOITE] Nenhuma textura disponível para transição!');
-        return;
-    }
+    if (isTransitioning || (!dayTexture && !nightTexture)) return;
     
     const targetBlend = targetMode === 'night' ? 1.0 : 0.0;
     const transitionDuration = duration || dayNightConfig.transitionTime;
     const startBlend = dayNightBlend;
     const startTime = performance.now() * 0.001;
-    
-    console.log('[DIA/NOITE] Iniciando transição:', {
-        targetMode,
-        targetBlend,
-        startBlend,
-        transitionDuration
-    });
     
     isTransitioning = true;
     
@@ -514,22 +414,18 @@ function transitionDayNight(targetMode, duration = null) {
         
         dayNightBlend = startBlend + (targetBlend - startBlend) * eased;
         
-        // Atualiza o skybox
+        // Atualiza skybox
         if (skybox.material && skybox.material.uniforms) {
             skybox.material.uniforms.blend.value = dayNightBlend;
         } else {
-            // Se não tem uniforms, precisa recriar o material
-            console.log('[DIA/NOITE] Material não tem uniforms, recriando skybox');
             updateSkybox();
         }
         
-        // Atualiza fog e ambiente
         updateEnvironmentForDayNight();
         
         if (progress < 1.0) {
             requestAnimationFrame(animateTransition);
         } else {
-            console.log('[DIA/NOITE] Transição concluída para', targetMode);
             isTransitioning = false;
             dayNightConfig.mode = targetMode;
         }
@@ -538,20 +434,20 @@ function transitionDayNight(targetMode, duration = null) {
     animateTransition();
 }
 
-// Função para atualizar ambiente (fog, luzes) conforme dia/noite
+// -----------------------------------------------------------------------------
+// Atualização do Ambiente (Fog, Luzes) conforme Dia/Noite
+// -----------------------------------------------------------------------------
 function updateEnvironmentForDayNight() {
     // Atualiza fog
     if (scene.fog && scene.fog.isFogExp2) {
-        const dayFogColor = new THREE.Color(0x87ceeb); // Azul claro
-        const nightFogColor = new THREE.Color(0x000033); // Azul escuro
+        const dayFogColor = new THREE.Color(0x87ceeb);
+        const nightFogColor = new THREE.Color(0x000033);
         scene.fog.color.lerpColors(dayFogColor, nightFogColor, dayNightBlend);
-        scene.fog.density = 0.015 + dayNightBlend * 0.01; // Mais denso à noite
+        scene.fog.density = 0.015 + dayNightBlend * 0.01;
     }
     
     // Atualiza luz ambiente
-    const dayAmbient = 0.1;
-    const nightAmbient = 0.05;
-    ambientLight.intensity = dayAmbient + (nightAmbient - dayAmbient) * dayNightBlend;
+    ambientLight.intensity = 0.1 - dayNightBlend * 0.05;
     
     // Atualiza luz de hemisfério
     const daySkyColor = new THREE.Color(0x87ceeb);
@@ -561,109 +457,125 @@ function updateEnvironmentForDayNight() {
     
     hemisphereLight.color.lerpColors(daySkyColor, nightSkyColor, dayNightBlend);
     hemisphereLight.groundColor.lerpColors(dayGroundColor, nightGroundColor, dayNightBlend);
-    hemisphereLight.intensity = 0.3 - dayNightBlend * 0.2; // Menos intenso à noite
+    hemisphereLight.intensity = 0.3 - dayNightBlend * 0.2;
 }
 
-// ============================================
-// Plataforma Plana Padrão
-// Terreno simples e plano para a cena natalina
-// ============================================
 
-// Terreno - Base (invisível, apenas para física)
-const terrainSize = 100; // Mesmo tamanho da plataforma
-const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 1, 1);
+// #############################################################################
+// # SEÇÃO 4: SISTEMA DE TERRENO E PLATAFORMA
+// #############################################################################
+
+// -----------------------------------------------------------------------------
+// Constantes da Plataforma
+// -----------------------------------------------------------------------------
+const PLATFORM_SIZE = 100;
+const BORDER_HEIGHT = 0.5;
+const BORDER_THICKNESS = 0.3;
+
+// -----------------------------------------------------------------------------
+// Terreno Base (invisível, para física)
+// -----------------------------------------------------------------------------
+const terrainGeometry = new THREE.PlaneGeometry(PLATFORM_SIZE, PLATFORM_SIZE, 1, 1);
 const terrainMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x4a7c59,
     roughness: 0.9,
     metalness: 0.1,
-    visible: false // Invisível, apenas para física
+    visible: false
 });
 const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
 terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
 
-// Chão visível - plataforma plana
-const floorSize = 100; // Tamanho da plataforma
-const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize, 1, 1);
+// -----------------------------------------------------------------------------
+// Chão Visível (Plataforma)
+// -----------------------------------------------------------------------------
+const floorGeometry = new THREE.PlaneGeometry(PLATFORM_SIZE, PLATFORM_SIZE, 1, 1);
 const floorMaterial = new THREE.MeshStandardMaterial({
-    color: 0x3a6b4a, // Verde mais escuro que a grama
+    color: 0x3a6b4a,
     roughness: 0.9,
     metalness: 0.1
 });
 const floor = new THREE.Mesh(floorGeometry, floorMaterial);
 floor.rotation.x = -Math.PI / 2;
-floor.position.y = 0; // Plano no nível 0
+floor.position.y = 0;
 floor.receiveShadow = true;
 scene.add(floor);
 
-// ============================================
-// Borda da Plataforma
-// ============================================
+// -----------------------------------------------------------------------------
+// Bordas da Plataforma
+// -----------------------------------------------------------------------------
 const borderGroup = new THREE.Group();
-const borderHeight = 0.5;
-const borderThickness = 0.3;
 const borderMaterial = new THREE.MeshStandardMaterial({
-    color: 0x5a4a3a, // Marrom/cinza para a borda
+    color: 0x5a4a3a,
     roughness: 0.8,
     metalness: 0.2
 });
 
-// Borda Norte (Z positivo)
+// Norte
 const borderNorth = new THREE.Mesh(
-    new THREE.BoxGeometry(floorSize + borderThickness * 2, borderHeight, borderThickness),
+    new THREE.BoxGeometry(PLATFORM_SIZE + BORDER_THICKNESS * 2, BORDER_HEIGHT, BORDER_THICKNESS),
     borderMaterial
 );
-borderNorth.position.set(0, borderHeight / 2, floorSize / 2 + borderThickness / 2);
+borderNorth.position.set(0, BORDER_HEIGHT / 2, PLATFORM_SIZE / 2 + BORDER_THICKNESS / 2);
 borderNorth.castShadow = true;
 borderNorth.receiveShadow = true;
 borderGroup.add(borderNorth);
 
-// Borda Sul (Z negativo)
+// Sul
 const borderSouth = new THREE.Mesh(
-    new THREE.BoxGeometry(floorSize + borderThickness * 2, borderHeight, borderThickness),
+    new THREE.BoxGeometry(PLATFORM_SIZE + BORDER_THICKNESS * 2, BORDER_HEIGHT, BORDER_THICKNESS),
     borderMaterial
 );
-borderSouth.position.set(0, borderHeight / 2, -floorSize / 2 - borderThickness / 2);
+borderSouth.position.set(0, BORDER_HEIGHT / 2, -PLATFORM_SIZE / 2 - BORDER_THICKNESS / 2);
 borderSouth.castShadow = true;
 borderSouth.receiveShadow = true;
 borderGroup.add(borderSouth);
 
-// Borda Leste (X positivo)
+// Leste
 const borderEast = new THREE.Mesh(
-    new THREE.BoxGeometry(borderThickness, borderHeight, floorSize),
+    new THREE.BoxGeometry(BORDER_THICKNESS, BORDER_HEIGHT, PLATFORM_SIZE),
     borderMaterial
 );
-borderEast.position.set(floorSize / 2 + borderThickness / 2, borderHeight / 2, 0);
+borderEast.position.set(PLATFORM_SIZE / 2 + BORDER_THICKNESS / 2, BORDER_HEIGHT / 2, 0);
 borderEast.castShadow = true;
 borderEast.receiveShadow = true;
 borderGroup.add(borderEast);
 
-// Borda Oeste (X negativo)
+// Oeste
 const borderWest = new THREE.Mesh(
-    new THREE.BoxGeometry(borderThickness, borderHeight, floorSize),
+    new THREE.BoxGeometry(BORDER_THICKNESS, BORDER_HEIGHT, PLATFORM_SIZE),
     borderMaterial
 );
-borderWest.position.set(-floorSize / 2 - borderThickness / 2, borderHeight / 2, 0);
+borderWest.position.set(-PLATFORM_SIZE / 2 - BORDER_THICKNESS / 2, BORDER_HEIGHT / 2, 0);
 borderWest.castShadow = true;
 borderWest.receiveShadow = true;
 borderGroup.add(borderWest);
 
 scene.add(borderGroup);
 
-// Função simplificada - sempre retorna 0 (terreno plano)
+// -----------------------------------------------------------------------------
+// Função de Altura do Terreno (plano = 0)
+// -----------------------------------------------------------------------------
 function getTerrainHeight(x, z) {
     return 0;
 }
 
-// Sistema de Trilhas (GroundData)
+
+// #############################################################################
+// # SEÇÃO 5: SISTEMA DE GRAMA
+// #############################################################################
+
+// -----------------------------------------------------------------------------
+// Classe GroundData (Sistema de Trilhas)
+// -----------------------------------------------------------------------------
 class GroundData {
     constructor(size = 100) {
         this.size = size;
-        this.trackCount = 4; // 4 trilhas (como 4 rodas, adaptado para pegadas)
+        this.trackCount = 4;
         this.trackLength = 128;
         
-        // DataTexture para cada trilha (128x1, RGBA)
+        // DataTexture para cada trilha
         this.trackTextures = [];
         for (let i = 0; i < this.trackCount; i++) {
             const data = new Float32Array(this.trackLength * 4);
@@ -672,16 +584,16 @@ class GroundData {
             this.trackTextures.push(texture);
         }
         
-        // RenderTarget para o mapa de trilhas (aumenta resolução para área maior)
+        // RenderTarget para mapa de trilhas
         this.renderTarget = new THREE.WebGLRenderTarget(1024, 1024, {
             format: THREE.RGBAFormat,
             type: THREE.FloatType
         });
         
-        // Cena separada para renderizar trilhas
+        // Cena e câmera para renderizar trilhas
         this.trackScene = new THREE.Scene();
         this.trackCamera = new THREE.OrthographicCamera(-size/2, size/2, size/2, -size/2, 0.1, 100);
-        this.trackCamera.position.set(0, 10, 0);
+        this.trackCamera.position.set(0, 2, 0);
         this.trackCamera.lookAt(0, 0, 0);
     }
     
@@ -691,25 +603,24 @@ class GroundData {
         const texture = this.trackTextures[trackIndex];
         const data = texture.image.data;
         
-        // Move todos os pontos uma posição à direita
+        // Shift dos pontos
         for (let i = (this.trackLength - 1) * 4; i >= 4; i -= 4) {
-            data[i] = data[i - 4];     // R = X
-            data[i + 1] = data[i - 3]; // G = Y
-            data[i + 2] = data[i - 2]; // Z
-            data[i + 3] = data[i - 1]; // A
+            data[i] = data[i - 4];
+            data[i + 1] = data[i - 3];
+            data[i + 2] = data[i - 2];
+            data[i + 3] = data[i - 1];
         }
         
-        // Adiciona novo ponto no início
+        // Novo ponto
         data[0] = position.x;
         data[1] = position.y;
         data[2] = position.z;
-        data[3] = 1.0; // Alpha = 1 quando toca o solo
+        data[3] = 1.0;
         
         texture.needsUpdate = true;
     }
     
     update(renderer) {
-        // Renderiza as trilhas no RenderTarget
         renderer.setRenderTarget(this.renderTarget);
         renderer.render(this.trackScene, this.trackCamera);
         renderer.setRenderTarget(null);
@@ -722,12 +633,13 @@ class GroundData {
 
 const groundData = new GroundData(100);
 
-// Sistema de Grama Limitada à Plataforma
+// -----------------------------------------------------------------------------
+// Classe PlatformGrass (Grama Limitada à Plataforma)
+// -----------------------------------------------------------------------------
 class PlatformGrass {
     constructor(count = 50000, platformSize = 100) {
         this.count = count;
         this.platformSize = platformSize;
-        this.bladeSize = 0.3;
         this.grassGeometry = null;
         this.grassMaterial = null;
         this.grassMesh = null;
@@ -744,52 +656,33 @@ class PlatformGrass {
         const widths = [];
         const indices = [];
         
-        // Gera blades de grama apenas dentro da área da plataforma
-        const halfSize = this.platformSize / 2;
-        const margin = 2; // Margem pequena para evitar grama na borda
+        const margin = 2;
         
         for (let i = 0; i < this.count; i++) {
-            // Gera apenas dentro da plataforma (com margem)
             const x = (Math.random() - 0.5) * (this.platformSize - margin * 2);
             const z = (Math.random() - 0.5) * (this.platformSize - margin * 2);
-            // Terreno plano - altura sempre 0
             const center = new THREE.Vector3(x, 0, z);
             this.centers.push(center);
             
             const height = 0.3 + Math.random() * 0.2;
             const width = 0.02 + Math.random() * 0.01;
             
-            // Cada blade é um triângulo simples (3 vértices)
-            const baseY = 0;
-            const topY = height;
+            // Triângulo: base esquerda, topo, base direita
+            positions.push(-width, 0, 0);
+            positions.push(0, height, 0);
+            positions.push(width, 0, 0);
             
-            // Vértice 1: base esquerda
-            positions.push(-width, baseY, 0);
-            centers.push(x, 0, z);
-            ids.push(i);
-            heights.push(height);
-            widths.push(width);
+            for (let j = 0; j < 3; j++) {
+                centers.push(x, 0, z);
+                ids.push(i);
+                heights.push(height);
+                widths.push(width);
+            }
             
-            // Vértice 2: topo
-            positions.push(0, topY, 0);
-            centers.push(x, 0, z);
-            ids.push(i);
-            heights.push(height);
-            widths.push(width);
-            
-            // Vértice 3: base direita
-            positions.push(width, baseY, 0);
-            centers.push(x, 0, z);
-            ids.push(i);
-            heights.push(height);
-            widths.push(width);
-            
-            // Índices do triângulo
             const baseIndex = i * 3;
             indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
         }
         
-        // Cria geometria
         this.grassGeometry = new THREE.BufferGeometry();
         this.grassGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         this.grassGeometry.setAttribute('center', new THREE.Float32BufferAttribute(centers, 3));
@@ -798,18 +691,15 @@ class PlatformGrass {
         this.grassGeometry.setAttribute('width', new THREE.Float32BufferAttribute(widths, 1));
         this.grassGeometry.setIndex(indices);
         
-        // Carrega shaders inline (mais confiável)
-        this.loadDefaultShaders();
+        this.createMaterial();
     }
     
-    loadDefaultShaders() {
-        // Shaders inline como fallback
+    createMaterial() {
         const vertexShader = `
             uniform float time;
             uniform vec3 uCameraPosition;
             uniform sampler2D trackTexture;
             attribute vec3 center;
-            attribute float id;
             attribute float height;
             attribute float width;
             varying vec3 vColor;
@@ -832,38 +722,33 @@ class PlatformGrass {
                 return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
             }
             
-            vec3 getWind(vec2 pos, float time) {
-                float windStrength = 0.15;
-                float windFrequency1 = 0.5;
-                float windFrequency2 = 1.5;
-                vec2 windDirection = vec2(1.0, 0.0);
-                vec2 windPos1 = pos * windFrequency1 + windDirection * time * 0.5;
-                vec2 windPos2 = pos * windFrequency2 + windDirection * time * 0.3;
-                float wind1 = noise(windPos1) * windStrength;
-                float wind2 = noise(windPos2) * windStrength * 0.5;
-                return vec3(wind1 + wind2, 0.0, 0.0);
-            }
-            
             void main() {
                 vTipness = float(gl_VertexID % 3) / 2.0;
+                
+                // Vento
+                float windStrength = 0.15;
+                vec2 windPos = center.xz * 0.5 + vec2(1.0, 0.0) * time * 0.5;
+                float wind = noise(windPos) * windStrength;
+                
                 vec3 localPos = position;
-                vec3 wind = getWind(center.xz, time);
-                localPos += wind * vTipness;
+                localPos.x += wind * vTipness;
+                
+                // Billboard
                 vec3 toCamera = normalize(uCameraPosition - center);
                 vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), toCamera));
                 vec3 up = cross(toCamera, right);
-                vec3 billboardPos = localPos.x * right + localPos.y * up;
-                vec3 worldPos = center + billboardPos;
-                vec2 trackUV = (worldPos.xz + 50.0) / 100.0; // Mantém compatibilidade com GroundData
+                
+                vec3 worldPos = center + localPos.x * right + localPos.y * up;
+                
+                // Trilhas
+                vec2 trackUV = (worldPos.xz + 50.0) / 100.0;
                 vec4 trackData = texture2D(trackTexture, trackUV);
                 vTrackInfluence = trackData.a;
-                float trackBend = vTrackInfluence * 0.3;
-                worldPos.y -= trackBend * vTipness;
-                float grassGreen = 0.3 + vTipness * 0.2;
-                grassGreen -= vTrackInfluence * 0.1;
-                vColor = vec3(0.1, grassGreen, 0.05);
+                worldPos.y -= vTrackInfluence * 0.3 * vTipness;
                 
-                // Calcula normal para o fragment shader
+                // Cor
+                float grassGreen = 0.3 + vTipness * 0.2 - vTrackInfluence * 0.1;
+                vColor = vec3(0.1, grassGreen, 0.05);
                 vNormal = normalize(normalMatrix * up);
                 
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(worldPos, 1.0);
@@ -878,22 +763,19 @@ class PlatformGrass {
             varying vec3 vNormal;
             
             void main() {
-                vec3 grassColor = vColor;
-                grassColor = mix(grassColor * 0.7, grassColor * 1.2, vTipness);
+                vec3 grassColor = mix(vColor * 0.7, vColor * 1.2, vTipness);
                 grassColor *= (1.0 - vTrackInfluence * 0.3);
                 
-                // Usa a normal passada do vertex shader
                 vec2 matcapUV = vNormal.xy * 0.5 + 0.5;
                 vec3 matcap = texture2D(matcapTexture, matcapUV).rgb;
                 vec3 finalColor = grassColor * (0.7 + matcap * 0.3);
                 
-                float alpha = 1.0;
-                alpha *= (1.0 - vTrackInfluence * 0.5);
+                float alpha = 1.0 - vTrackInfluence * 0.5;
                 gl_FragColor = vec4(finalColor, alpha);
             }
         `;
         
-        // Cria MatCap texture
+        // MatCap texture procedural
         const matcapSize = 256;
         const matcapData = new Uint8Array(matcapSize * matcapSize * 4);
         for (let i = 0; i < matcapSize * matcapSize; i++) {
@@ -916,8 +798,6 @@ class PlatformGrass {
                 time: { value: 0 },
                 uCameraPosition: { value: camera.position },
                 trackTexture: { value: groundData.getTrackTexture() },
-                grassDensity: { value: 1.0 },
-                windDirection: { value: new THREE.Vector2(1, 0) },
                 matcapTexture: { value: matcapTexture }
             },
             side: THREE.DoubleSide,
@@ -935,23 +815,27 @@ class PlatformGrass {
             this.grassMaterial.uniforms.time.value = time;
             this.grassMaterial.uniforms.uCameraPosition.value.copy(cameraPos);
             this.grassMaterial.uniforms.trackTexture.value = groundData.getTrackTexture();
-            // Não precisa reposicionar - grama está fixa na plataforma
         }
     }
 }
 
-// Grama limitada à plataforma
-const platformGrass = new PlatformGrass(50000, floorSize);
+const platformGrass = new PlatformGrass(50000, PLATFORM_SIZE);
 
-// Caminho de pedras em frente à igreja
+
+// #############################################################################
+// # SEÇÃO 6: ELEMENTOS DECORATIVOS NATALINOS
+// #############################################################################
+
+// -----------------------------------------------------------------------------
+// Caminho de Pedras
+// -----------------------------------------------------------------------------
 const pathGroup = new THREE.Group();
 const pathMaterial = new THREE.MeshStandardMaterial({
-    color: 0x6b6b6b, // Cinza pedra
+    color: 0x6b6b6b,
     roughness: 0.8,
     metalness: 0.1
 });
 
-// Cria várias pedras para o caminho
 for (let i = 0; i < 8; i++) {
     const stoneSize = 0.8 + Math.random() * 0.4;
     const stoneGeometry = new THREE.BoxGeometry(
@@ -971,328 +855,241 @@ for (let i = 0; i < 8; i++) {
 }
 scene.add(pathGroup);
 
-// ============================================
-// Decorações Natalinas Aleatórias
-// ============================================
-
-const christmasDecorations = new THREE.Group();
-
-// Função para criar decorações natalinas
+// -----------------------------------------------------------------------------
+// Função: Criar Decoração Natalina
+// -----------------------------------------------------------------------------
 function createChristmasDecoration(type, x, z) {
     const decoration = new THREE.Group();
     
     switch(type) {
-        case 'present':
-            // Presente - caixa colorida com fita
+        case 'present': {
             const boxSize = 0.3 + Math.random() * 0.2;
-            const boxGeometry = new THREE.BoxGeometry(boxSize, boxSize * 0.6, boxSize);
-            const boxColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff]; // Vermelho, verde, azul, amarelo, magenta
+            const boxColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
             const boxColor = boxColors[Math.floor(Math.random() * boxColors.length)];
-            const boxMaterial = new THREE.MeshStandardMaterial({
-                color: boxColor,
-                roughness: 0.6,
-                metalness: 0.2
-            });
-            const box = new THREE.Mesh(boxGeometry, boxMaterial);
+            
+            // Caixa
+            const box = new THREE.Mesh(
+                new THREE.BoxGeometry(boxSize, boxSize * 0.6, boxSize),
+                new THREE.MeshStandardMaterial({ color: boxColor, roughness: 0.6, metalness: 0.2 })
+            );
             box.position.y = boxSize * 0.3;
             box.castShadow = true;
-            box.receiveShadow = true;
             decoration.add(box);
             
-            // Fita horizontal
-            const ribbonHGeometry = new THREE.BoxGeometry(boxSize * 1.1, boxSize * 0.1, boxSize * 0.1);
-            const ribbonHMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffd700, // Dourado
-                roughness: 0.4,
-                metalness: 0.6
-            });
-            const ribbonH = new THREE.Mesh(ribbonHGeometry, ribbonHMaterial);
+            // Fitas
+            const ribbonMat = new THREE.MeshStandardMaterial({ color: 0xffd700, roughness: 0.4, metalness: 0.6 });
+            const ribbonH = new THREE.Mesh(new THREE.BoxGeometry(boxSize * 1.1, boxSize * 0.1, boxSize * 0.1), ribbonMat);
             ribbonH.position.y = boxSize * 0.3;
             decoration.add(ribbonH);
             
-            // Fita vertical
-            const ribbonVGeometry = new THREE.BoxGeometry(boxSize * 0.1, boxSize * 0.7, boxSize * 0.1);
-            const ribbonVMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffd700,
-                roughness: 0.4,
-                metalness: 0.6
-            });
-            const ribbonV = new THREE.Mesh(ribbonVGeometry, ribbonVMaterial);
+            const ribbonV = new THREE.Mesh(new THREE.BoxGeometry(boxSize * 0.1, boxSize * 0.7, boxSize * 0.1), ribbonMat);
             ribbonV.position.y = boxSize * 0.3;
             decoration.add(ribbonV);
             
-            // Laço no topo
-            const bowGeometry = new THREE.SphereGeometry(boxSize * 0.15, 8, 8);
-            const bowMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffd700,
-                roughness: 0.3,
-                metalness: 0.7
-            });
-            const bow = new THREE.Mesh(bowGeometry, bowMaterial);
+            // Laço
+            const bow = new THREE.Mesh(new THREE.SphereGeometry(boxSize * 0.15, 8, 8), ribbonMat);
             bow.position.y = boxSize * 0.6;
             decoration.add(bow);
             break;
-            
-        case 'star':
-            // Estrela decorativa
+        }
+        case 'star': {
             const starSize = 0.2 + Math.random() * 0.15;
-            const starGeometry = new THREE.ConeGeometry(starSize, starSize * 0.8, 5);
-            const starMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffd700,
-                emissive: 0xffaa00,
-                emissiveIntensity: 0.5,
-                roughness: 0.3,
-                metalness: 0.8
-            });
-            const star = new THREE.Mesh(starGeometry, starMaterial);
+            const star = new THREE.Mesh(
+                new THREE.ConeGeometry(starSize, starSize * 0.8, 5),
+                new THREE.MeshStandardMaterial({
+                    color: 0xffd700, emissive: 0xffaa00, emissiveIntensity: 0.5,
+                    roughness: 0.3, metalness: 0.8
+                })
+            );
             star.position.y = starSize * 0.4;
             star.rotation.z = Math.PI;
             star.castShadow = true;
-            star.receiveShadow = true;
             decoration.add(star);
             break;
-            
-        case 'bell':
-            // Sino
+        }
+        case 'bell': {
             const bellSize = 0.15 + Math.random() * 0.1;
-            const bellGeometry = new THREE.ConeGeometry(bellSize, bellSize * 1.2, 8);
-            const bellMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffd700,
-                roughness: 0.3,
-                metalness: 0.9
-            });
-            const bell = new THREE.Mesh(bellGeometry, bellMaterial);
+            const bell = new THREE.Mesh(
+                new THREE.ConeGeometry(bellSize, bellSize * 1.2, 8),
+                new THREE.MeshStandardMaterial({ color: 0xffd700, roughness: 0.3, metalness: 0.9 })
+            );
             bell.position.y = bellSize * 0.6;
             bell.rotation.x = Math.PI;
             bell.castShadow = true;
-            bell.receiveShadow = true;
             decoration.add(bell);
             
-            // Alça do sino
-            const handleGeometry = new THREE.TorusGeometry(bellSize * 0.3, bellSize * 0.05, 8, 16);
-            const handleMaterial = new THREE.MeshStandardMaterial({
-                color: 0x8b4513,
-                roughness: 0.8,
-                metalness: 0.2
-            });
-            const handle = new THREE.Mesh(handleGeometry, handleMaterial);
+            const handle = new THREE.Mesh(
+                new THREE.TorusGeometry(bellSize * 0.3, bellSize * 0.05, 8, 16),
+                new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.8, metalness: 0.2 })
+            );
             handle.position.y = bellSize * 1.3;
             handle.rotation.x = Math.PI / 2;
             decoration.add(handle);
             break;
-            
-        case 'candle':
-            // Vela decorativa
+        }
+        case 'candle': {
             const candleHeight = 0.2 + Math.random() * 0.15;
             const candleRadius = 0.03;
-            const candleGeometry = new THREE.CylinderGeometry(candleRadius, candleRadius, candleHeight, 8);
-            const candleMaterial = new THREE.MeshStandardMaterial({
-                color: 0xffffff,
-                roughness: 0.7,
-                metalness: 0.1
-            });
-            const candle = new THREE.Mesh(candleGeometry, candleMaterial);
+            
+            const candle = new THREE.Mesh(
+                new THREE.CylinderGeometry(candleRadius, candleRadius, candleHeight, 8),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 })
+            );
             candle.position.y = candleHeight / 2;
             candle.castShadow = true;
-            candle.receiveShadow = true;
             decoration.add(candle);
             
-            // Chama
-            const flameGeometry = new THREE.SphereGeometry(candleRadius * 1.5, 8, 8);
-            const flameMaterial = new THREE.MeshBasicMaterial({
-                color: 0xff6600,
-                emissive: 0xff3300,
-                transparent: true,
-                opacity: 0.8
-            });
-            const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+            const flame = new THREE.Mesh(
+                new THREE.SphereGeometry(candleRadius * 1.5, 8, 8),
+                new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 })
+            );
             flame.position.y = candleHeight + candleRadius * 1.5;
             decoration.add(flame);
             break;
-            
-        default:
-            // Decoração genérica (esfera colorida)
-            const sphereSize = 0.15 + Math.random() * 0.1;
-            const sphereGeometry = new THREE.SphereGeometry(sphereSize, 8, 8);
-            const sphereColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00];
-            const sphereColor = sphereColors[Math.floor(Math.random() * sphereColors.length)];
-            const sphereMaterial = new THREE.MeshStandardMaterial({
-                color: sphereColor,
-                roughness: 0.4,
-                metalness: 0.6
-            });
-            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-            sphere.position.y = sphereSize;
-            sphere.castShadow = true;
-            sphere.receiveShadow = true;
-            decoration.add(sphere);
+        }
     }
     
     decoration.position.set(x, 0, z);
     return decoration;
 }
 
-// Gera 20-30 decorações natalinas aleatórias
-const numDecorations = 20 + Math.floor(Math.random() * 11); // 20-30 decorações
+// -----------------------------------------------------------------------------
+// Geração de Decorações Natalinas Aleatórias
+// -----------------------------------------------------------------------------
+const christmasDecorations = new THREE.Group();
 const decorationTypes = ['present', 'star', 'bell', 'candle'];
-const minDecoRadius = 6; // Distância mínima da igreja
-const maxDecoRadius = 35; // Distância máxima da igreja
+const numDecorations = 20 + Math.floor(Math.random() * 11);
 
 for (let i = 0; i < numDecorations; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const radius = minDecoRadius + Math.random() * (maxDecoRadius - minDecoRadius);
+    const radius = 6 + Math.random() * 29; // 6-35 unidades
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
-    
-    // Escolhe tipo aleatório
     const type = decorationTypes[Math.floor(Math.random() * decorationTypes.length)];
     
-    const decoration = createChristmasDecoration(type, x, z);
-    christmasDecorations.add(decoration);
+    christmasDecorations.add(createChristmasDecoration(type, x, z));
 }
-
 scene.add(christmasDecorations);
 
-// ============================================
-// Árvores de Natal Decoradas
-// ============================================
-
-const christmasTreesGroup = new THREE.Group();
-
-// Função para criar uma árvore de Natal decorada
+// -----------------------------------------------------------------------------
+// Função: Criar Árvore de Natal
+// -----------------------------------------------------------------------------
 function createChristmasTree(x, z, scale = 1) {
     const tree = new THREE.Group();
     
     // Tronco
-    const trunkGeometry = new THREE.CylinderGeometry(0.15 * scale, 0.2 * scale, 1.2 * scale, 8);
-    const trunkMaterial = new THREE.MeshStandardMaterial({
-        color: 0x5d4037, // Marrom
-        roughness: 0.9,
-        metalness: 0.1
-    });
-    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+    const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.15 * scale, 0.2 * scale, 1.2 * scale, 8),
+        new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.9 })
+    );
     trunk.position.y = 0.6 * scale;
     trunk.castShadow = true;
-    trunk.receiveShadow = true;
     tree.add(trunk);
     
-    // Camadas de folhas (formato de pinheiro)
-    const layerHeights = [0.8, 1.2, 1.6, 2.0]; // Alturas das camadas
-    const layerRadii = [1.2, 1.0, 0.8, 0.6]; // Raios das camadas (decrescentes)
-    const layerColors = [0x1a5a1a, 0x1d5f1d, 0x206420, 0x236923]; // Verdes ligeiramente diferentes
+    // Camadas de folhas
+    const layerHeights = [0.8, 1.2, 1.6, 2.0];
+    const layerRadii = [1.2, 1.0, 0.8, 0.6];
+    const layerColors = [0x1a5a1a, 0x1d5f1d, 0x206420, 0x236923];
     
     layerHeights.forEach((height, index) => {
-        const layerGeometry = new THREE.ConeGeometry(
-            layerRadii[index] * scale,
-            height * scale * 0.5,
-            8
+        const layer = new THREE.Mesh(
+            new THREE.ConeGeometry(layerRadii[index] * scale, height * scale * 0.5, 8),
+            new THREE.MeshStandardMaterial({ color: layerColors[index], roughness: 0.8 })
         );
-        const layerMaterial = new THREE.MeshStandardMaterial({
-            color: layerColors[index],
-            roughness: 0.8,
-            metalness: 0.1
-        });
-        const layer = new THREE.Mesh(layerGeometry, layerMaterial);
         layer.position.y = (height * scale * 0.5) + (index * 0.3 * scale);
         layer.castShadow = true;
-        layer.receiveShadow = true;
         tree.add(layer);
     });
     
-    // Bolas decorativas coloridas
-    const ornamentColors = [0xff0000, 0xffd700, 0x0000ff, 0xff00ff, 0x00ffff]; // Vermelho, dourado, azul, magenta, ciano
-    const numOrnaments = 8 + Math.floor(Math.random() * 5); // 8-12 bolas
+    // Bolas decorativas
+    const ornamentColors = [0xff0000, 0xffd700, 0x0000ff, 0xff00ff, 0x00ffff];
+    const numOrnaments = 8 + Math.floor(Math.random() * 5);
     
     for (let i = 0; i < numOrnaments; i++) {
-        const ornamentGeometry = new THREE.SphereGeometry(0.08 * scale, 8, 8);
-        const ornamentMaterial = new THREE.MeshStandardMaterial({
-            color: ornamentColors[Math.floor(Math.random() * ornamentColors.length)],
-            roughness: 0.3,
-            metalness: 0.7,
-            emissive: new THREE.Color(ornamentColors[Math.floor(Math.random() * ornamentColors.length)]),
-            emissiveIntensity: 0.3
-        });
-        const ornament = new THREE.Mesh(ornamentGeometry, ornamentMaterial);
+        const ornament = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08 * scale, 8, 8),
+            new THREE.MeshStandardMaterial({
+                color: ornamentColors[Math.floor(Math.random() * ornamentColors.length)],
+                roughness: 0.3, metalness: 0.7,
+                emissive: new THREE.Color(ornamentColors[Math.floor(Math.random() * ornamentColors.length)]),
+                emissiveIntensity: 0.3
+            })
+        );
         
-        // Posiciona aleatoriamente nas camadas
         const layerIndex = Math.floor(Math.random() * layerHeights.length);
         const layerY = (layerHeights[layerIndex] * scale * 0.5) + (layerIndex * 0.3 * scale);
         const angle = Math.random() * Math.PI * 2;
         const radius = (0.3 + Math.random() * 0.4) * layerRadii[layerIndex] * scale;
+        
         ornament.position.set(
             Math.cos(angle) * radius,
             layerY + (Math.random() - 0.5) * 0.3 * scale,
             Math.sin(angle) * radius
         );
-        ornament.castShadow = true;
-        ornament.receiveShadow = true;
         tree.add(ornament);
     }
     
     // Estrela no topo
-    const starGeometry = new THREE.ConeGeometry(0.15 * scale, 0.4 * scale, 5);
-    const starMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffd700, // Dourado
-        emissive: 0xffaa00,
-        emissiveIntensity: 0.5,
-        roughness: 0.3,
-        metalness: 0.8
-    });
-    const star = new THREE.Mesh(starGeometry, starMaterial);
+    const star = new THREE.Mesh(
+        new THREE.ConeGeometry(0.15 * scale, 0.4 * scale, 5),
+        new THREE.MeshStandardMaterial({
+            color: 0xffd700, emissive: 0xffaa00, emissiveIntensity: 0.5,
+            roughness: 0.3, metalness: 0.8
+        })
+    );
     const topHeight = layerHeights[layerHeights.length - 1] * scale + (layerHeights.length - 1) * 0.3 * scale;
     star.position.y = topHeight + 0.2 * scale;
     star.rotation.z = Math.PI;
-    star.castShadow = true;
-    star.receiveShadow = true;
     tree.add(star);
     
     tree.position.set(x, 0, z);
     return tree;
 }
 
-// Gera 10-15 árvores de Natal aleatórias ao redor da igreja
-const numTrees = 10 + Math.floor(Math.random() * 6); // 10-15 árvores
-const minRadius = 8; // Distância mínima da igreja
-const maxRadius = 40; // Distância máxima da igreja
+// -----------------------------------------------------------------------------
+// Geração de Árvores de Natal Aleatórias
+// -----------------------------------------------------------------------------
+const christmasTreesGroup = new THREE.Group();
+const numTrees = 10 + Math.floor(Math.random() * 6);
 
 for (let i = 0; i < numTrees; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const radius = minRadius + Math.random() * (maxRadius - minRadius);
+    const radius = 8 + Math.random() * 32; // 8-40 unidades
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
-    const scale = 0.8 + Math.random() * 0.4; // Variação de tamanho
+    const scale = 0.8 + Math.random() * 0.4;
     
-    const tree = createChristmasTree(x, z, scale);
-    christmasTreesGroup.add(tree);
+    christmasTreesGroup.add(createChristmasTree(x, z, scale));
 }
-
 scene.add(christmasTreesGroup);
 
-// Variável para armazenar o modelo
+
+// #############################################################################
+// # SEÇÃO 7: CARREGAMENTO DO MODELO PRINCIPAL
+// #############################################################################
+
+// -----------------------------------------------------------------------------
+// Variáveis do Modelo
+// -----------------------------------------------------------------------------
 let model = null;
 let modelPosition = { x: 0, y: 0, z: 0 };
-let modelRotation = { x: 0, y: 0, z: 0 };
-let modelScale = { x: 1, y: 1, z: 1 };
 
-// Loader para modelos GLTF
-const loader = new GLTFLoader();
-
-// Elemento de loading
+// -----------------------------------------------------------------------------
+// Loaders
+// -----------------------------------------------------------------------------
+const gltfLoader = new GLTFLoader();
 const loadingElement = document.getElementById('loading');
 
-// ============================================
-// TÉCNICA: Multi-Textura
-// Cria texturas procedurais de detalhes (sujeira, musgo) para combinar com texturas base
-// ============================================
-
-// Função para criar textura de detalhes procedurais (sujeira/musgo)
+// -----------------------------------------------------------------------------
+// Textura de Detalhes Procedural (Multi-Textura)
+// -----------------------------------------------------------------------------
 function createDetailTexture(size = 512) {
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
     
-    // Base verde musgo
+    // Gradiente base
     const gradient = ctx.createLinearGradient(0, 0, size, size);
     gradient.addColorStop(0, 'rgba(50, 100, 30, 0)');
     gradient.addColorStop(0.3, 'rgba(60, 120, 40, 0.3)');
@@ -1301,7 +1098,7 @@ function createDetailTexture(size = 512) {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
     
-    // Adiciona manchas de sujeira
+    // Manchas de sujeira
     for (let i = 0; i < 50; i++) {
         const x = Math.random() * size;
         const y = Math.random() * size;
@@ -1317,7 +1114,7 @@ function createDetailTexture(size = 512) {
         ctx.fill();
     }
     
-    // Adiciona padrões de musgo (manchas verdes)
+    // Manchas de musgo
     for (let i = 0; i < 30; i++) {
         const x = Math.random() * size;
         const y = Math.random() * size;
@@ -1337,181 +1134,105 @@ function createDetailTexture(size = 512) {
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(2, 2); // Repete a textura
+    texture.repeat.set(2, 2);
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     
     return texture;
 }
 
-// Cria textura de detalhes
 const detailTexture = createDetailTexture(512);
 
-// ============================================
-// TÉCNICA: Environment Mapping (CubeMap)
-// Cria um cubemap para reflexões realistas
-// ============================================
-
-// Variável para armazenar configurações de multi-textura e environment mapping
+// -----------------------------------------------------------------------------
+// Configurações de Textura
+// -----------------------------------------------------------------------------
 const textureConfig = {
     multiTextureEnabled: true,
     envMapIntensity: 0.5
 };
 
-// Carrega o modelo
+// -----------------------------------------------------------------------------
+// Carregamento do Modelo GLTF
+// -----------------------------------------------------------------------------
 loadingElement.classList.add('show');
-loader.load(
+
+gltfLoader.load(
     '/assets/models/stylized_gothic_church/scene.gltf',
     (gltf) => {
         model = gltf.scene;
         
-        // Habilita sombras e ajusta materiais para responder à iluminação
+        // Processar materiais
         model.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
                 
-                // Garante que os materiais respondam à iluminação
                 if (child.material) {
-                    // Função auxiliar para aplicar multi-textura e environment mapping
-                    const applyAdvancedTexturing = (mat) => {
-                        // Converte para MeshPhysicalMaterial para suportar environment mapping
+                    const processMaterial = (mat) => {
+                        // Converter para MeshPhysicalMaterial
                         if (!mat.isMeshPhysicalMaterial) {
-                            const oldMat = mat;
                             const newMat = new THREE.MeshPhysicalMaterial({
-                                color: oldMat.color,
-                                map: oldMat.map,
-                                normalMap: oldMat.normalMap,
-                                roughnessMap: oldMat.roughnessMap,
-                                metalnessMap: oldMat.metalnessMap,
-                                aoMap: oldMat.aoMap,
-                                emissiveMap: oldMat.emissiveMap,
-                                transparent: oldMat.transparent,
-                                opacity: oldMat.opacity,
-                                side: oldMat.side,
-                                roughness: oldMat.roughness !== undefined ? oldMat.roughness : 0.7,
-                                metalness: oldMat.metalness !== undefined ? oldMat.metalness : 0.1
+                                color: mat.color,
+                                map: mat.map,
+                                normalMap: mat.normalMap,
+                                roughnessMap: mat.roughnessMap,
+                                metalnessMap: mat.metalnessMap,
+                                aoMap: textureConfig.multiTextureEnabled ? detailTexture : mat.aoMap,
+                                transparent: mat.transparent,
+                                opacity: mat.opacity,
+                                side: mat.side,
+                                roughness: mat.roughness ?? 0.7,
+                                metalness: mat.metalness ?? 0.1
                             });
                             
-                            // Multi-Textura: adiciona textura de detalhes
-                            if (textureConfig.multiTextureEnabled) {
-                                newMat.aoMap = detailTexture; // Usa como AO map para detalhes
-                            }
-                            
-                            // Environment Mapping: usa o environment map da cena
                             if (scene.environment) {
                                 newMat.envMap = scene.environment;
                                 newMat.envMapIntensity = textureConfig.envMapIntensity;
                             }
                             
                             return newMat;
-                        } else {
-                            // Já é MeshPhysicalMaterial, apenas adiciona as texturas
-                            if (textureConfig.multiTextureEnabled) {
-                                mat.aoMap = detailTexture;
-                            }
-                            if (scene.environment) {
-                                mat.envMap = scene.environment;
-                                mat.envMapIntensity = textureConfig.envMapIntensity;
-                            }
-                            return mat;
                         }
+                        return mat;
                     };
                     
-                    // Se for um array de materiais
-                    if (Array.isArray(child.material)) {
-                        child.material = child.material.map((mat, index) => {
-                            // Converte MeshBasicMaterial para MeshStandardMaterial primeiro
-                            if (mat.type === 'MeshBasicMaterial') {
-                                const newMaterial = new THREE.MeshStandardMaterial({
-                                    color: mat.color,
-                                    map: mat.map,
-                                    normalMap: mat.normalMap,
-                                    roughnessMap: mat.roughnessMap,
-                                    metalnessMap: mat.metalnessMap,
-                                    aoMap: mat.aoMap,
-                                    emissiveMap: mat.emissiveMap,
-                                    transparent: mat.transparent,
-                                    opacity: mat.opacity,
-                                    side: mat.side
-                                });
-                                return applyAdvancedTexturing(newMaterial);
-                            } else {
-                                return applyAdvancedTexturing(mat);
-                            }
-                        });
-                    } else {
-                        // Material único
-                        if (child.material.type === 'MeshBasicMaterial') {
-                            const oldMat = child.material;
-                            const newMaterial = new THREE.MeshStandardMaterial({
-                                color: oldMat.color,
-                                map: oldMat.map,
-                                normalMap: oldMat.normalMap,
-                                roughnessMap: oldMat.roughnessMap,
-                                metalnessMap: oldMat.metalnessMap,
-                                aoMap: oldMat.aoMap,
-                                emissiveMap: oldMat.emissiveMap,
-                                transparent: oldMat.transparent,
-                                opacity: oldMat.opacity,
-                                side: oldMat.side
-                            });
-                            child.material = applyAdvancedTexturing(newMaterial);
-                        } else {
-                            child.material = applyAdvancedTexturing(child.material);
-                        }
-                    }
-                    
-                    // Aplica filtro anisotrópico em todas as texturas
+                    // Aplicar filtro anisotrópico
                     const applyAnisotropy = (mat) => {
-                        if (mat.map) mat.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                        if (mat.normalMap) mat.normalMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                        if (mat.roughnessMap) mat.roughnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                        if (mat.metalnessMap) mat.metalnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                        if (mat.aoMap) mat.aoMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                        const maxAniso = renderer.capabilities.getMaxAnisotropy();
+                        if (mat.map) mat.map.anisotropy = maxAniso;
+                        if (mat.normalMap) mat.normalMap.anisotropy = maxAniso;
+                        if (mat.roughnessMap) mat.roughnessMap.anisotropy = maxAniso;
+                        if (mat.metalnessMap) mat.metalnessMap.anisotropy = maxAniso;
+                        if (mat.aoMap) mat.aoMap.anisotropy = maxAniso;
                     };
                     
                     if (Array.isArray(child.material)) {
+                        child.material = child.material.map(processMaterial);
                         child.material.forEach(applyAnisotropy);
                     } else {
+                        child.material = processMaterial(child.material);
                         applyAnisotropy(child.material);
                     }
                 }
             }
         });
         
-        // Calcula o bounding box para centralizar o modelo
+        // Posicionar modelo
+        model.position.set(0, 0, 0);
+        modelPosition = { x: 0, y: 0, z: 0 };
+        
+        // Ajustar câmera
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-        
-        // Centraliza o modelo
-        model.position.x = 0;
-        model.position.y = 0;
-        model.position.z = 0;
-        
-        // Atualiza as variáveis de posição
-        modelPosition.x = model.position.x;
-        modelPosition.y = model.position.y;
-        modelPosition.z = model.position.z;
-        
-        // Ajusta a câmera para focar no modelo
         const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
-        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-        cameraZ *= 1.5; // Adiciona um pouco de espaço
+        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
         
-        camera.position.set(cameraZ, cameraZ * 0.5, cameraZ);
+        camera.position.set(cameraZ - 5, cameraZ * 0.5, cameraZ);
         camera.lookAt(0, 0, 0);
         controls.target.set(0, 0, 0);
         controls.update();
         
-        // Adiciona o modelo à cena
         scene.add(model);
-        
-        // Esconde o loading
         loadingElement.classList.remove('show');
-        
-        // Inicializa a GUI após o modelo carregar
         initGUI();
         
         console.log('Modelo carregado com sucesso!');
@@ -1519,7 +1240,6 @@ loader.load(
     (progress) => {
         const percent = (progress.loaded / progress.total * 100).toFixed(0);
         loadingElement.textContent = `Carregando modelo... ${percent}%`;
-        console.log('Carregando modelo...', percent + '%');
     },
     (error) => {
         loadingElement.textContent = 'Erro ao carregar modelo!';
@@ -1527,37 +1247,43 @@ loader.load(
     }
 );
 
-// Grid helper
+// -----------------------------------------------------------------------------
+// Helpers (Grid e Eixos)
+// -----------------------------------------------------------------------------
 const gridHelper = new THREE.GridHelper(20, 20, 0x888888, 0xcccccc);
 scene.add(gridHelper);
 
-// Axes helper (opcional - mostra os eixos X, Y, Z)
 const axesHelper = new THREE.AxesHelper(2);
 scene.add(axesHelper);
 
-// Configurações para a GUI
+
+// #############################################################################
+// # SEÇÃO 8: INTERFACE DO USUÁRIO (GUI)
+// #############################################################################
+
+// -----------------------------------------------------------------------------
+// Configurações da GUI
+// -----------------------------------------------------------------------------
 const guiConfig = {
-    // Câmera
     camera: {
         x: camera.position.x,
         y: camera.position.y,
         z: camera.position.z,
         fov: camera.fov
     },
-    // Ambiente
     ambiente: {
         cor: '#000000',
         intensidade: ambientLight.intensity
     }
 };
 
-// Função para inicializar a GUI (refatorada - apenas controles essenciais)
+// -----------------------------------------------------------------------------
+// Inicialização da GUI
+// -----------------------------------------------------------------------------
 function initGUI() {
     const gui = new GUI({ title: 'Controles da Cena' });
     
-    // ========== CONTROLES ESSENCIAIS ==========
-    
-    // 1. Show de Luzes (Técnica: SpotLights)
+    // Show de Luzes
     const lightsFolder = gui.addFolder('🎆 Show de Luzes');
     lightsFolder.add(lightShowConfig, 'enabled').name('Ativar Show');
     lightsFolder.add(lightShowConfig, 'speed', 0.1, 3, 0.1).name('Velocidade');
@@ -1566,42 +1292,27 @@ function initGUI() {
     lightsFolder.add(lightShowConfig, 'colorChangeEnabled').name('Mudança de Cor');
     lightsFolder.open();
     
-    // 2. Modo Dia/Noite (Técnica: Skybox + Transição)
+    // Modo Dia/Noite
     const dayNightFolder = gui.addFolder('🌅 Modo Dia/Noite');
-    dayNightFolder.add(dayNightConfig, 'mode', ['day', 'night']).name('Modo').onChange((value) => {
-        transitionDayNight(value);
-    });
+    dayNightFolder.add(dayNightConfig, 'mode', ['day', 'night']).name('Modo').onChange(transitionDayNight);
     dayNightFolder.add(dayNightConfig, 'transitionTime', 0.5, 10, 0.5).name('Tempo Transição (s)');
     dayNightFolder.add(dayNightConfig, 'autoTransition').name('Transição Automática');
     dayNightFolder.add(dayNightConfig, 'autoTransitionSpeed', 0.01, 0.5, 0.01).name('Velocidade Auto');
-    dayNightFolder.add({
-        irParaDia: () => transitionDayNight('day')
-    }, 'irParaDia').name('➡️ Ir para Dia');
-    dayNightFolder.add({
-        irParaNoite: () => transitionDayNight('night')
-    }, 'irParaNoite').name('➡️ Ir para Noite');
+    dayNightFolder.add({ irParaDia: () => transitionDayNight('day') }, 'irParaDia').name('➡️ Ir para Dia');
+    dayNightFolder.add({ irParaNoite: () => transitionDayNight('night') }, 'irParaNoite').name('➡️ Ir para Noite');
     dayNightFolder.open();
     
-    // 3. Fog (Técnica: Neblina)
-    const fogConfig = {
-        habilitado: true,
-        densidade: 0.015
-    };
+    // Fog
+    const fogConfig = { habilitado: true, densidade: 0.015 };
     const fogFolder = gui.addFolder('🌫️ Fog (Neblina)');
     fogFolder.add(fogConfig, 'habilitado').name('Habilitado').onChange((value) => {
-        if (value) {
-            scene.fog = new THREE.FogExp2(0x87ceeb, fogConfig.densidade);
-        } else {
-            scene.fog = null;
-        }
+        scene.fog = value ? new THREE.FogExp2(0x87ceeb, fogConfig.densidade) : null;
     });
     fogFolder.add(fogConfig, 'densidade', 0, 0.1, 0.001).name('Densidade').onChange((value) => {
-        if (scene.fog && scene.fog.isFogExp2) {
-            scene.fog.density = value;
-        }
+        if (scene.fog && scene.fog.isFogExp2) scene.fog.density = value;
     });
     
-    // 4. Texturas Avançadas (Técnicas: Multi-Textura + Environment Mapping)
+    // Texturas
     const textureFolder = gui.addFolder('🎨 Texturas Avançadas');
     textureFolder.add(textureConfig, 'multiTextureEnabled').name('Multi-Textura').onChange((value) => {
         if (model) {
@@ -1609,11 +1320,7 @@ function initGUI() {
                 if (child.isMesh && child.material) {
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                     materials.forEach(mat => {
-                        if (value) {
-                            mat.aoMap = detailTexture;
-                        } else {
-                            mat.aoMap = null;
-                        }
+                        mat.aoMap = value ? detailTexture : null;
                         mat.needsUpdate = true;
                     });
                 }
@@ -1626,16 +1333,14 @@ function initGUI() {
                 if (child.isMesh && child.material) {
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                     materials.forEach(mat => {
-                        if (mat.isMeshPhysicalMaterial) {
-                            mat.envMapIntensity = value;
-                        }
+                        if (mat.isMeshPhysicalMaterial) mat.envMapIntensity = value;
                     });
                 }
             });
         }
     });
     
-    // 5. Câmera (Navegação)
+    // Câmera
     const cameraFolder = gui.addFolder('📷 Câmera');
     cameraFolder.add(guiConfig.camera, 'fov', 10, 120, 1).name('Campo de Visão').onChange((value) => {
         camera.fov = value;
@@ -1648,88 +1353,89 @@ function initGUI() {
                 const size = box.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z);
                 const fov = camera.fov * (Math.PI / 180);
-                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                cameraZ *= 1.5;
+                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.5;
+                
                 camera.position.set(cameraZ, cameraZ * 0.5, cameraZ);
                 camera.lookAt(0, 0, 0);
                 controls.target.set(0, 0, 0);
                 controls.update();
-                guiConfig.camera.x = camera.position.x;
-                guiConfig.camera.y = camera.position.y;
-                guiConfig.camera.z = camera.position.z;
             }
         }
     }, 'resetCamera').name('Resetar Câmera');
 }
 
-// Variável para rastrear posição anterior da câmera (para criar trilhas)
-let lastCameraPosition = new THREE.Vector3();
-let trackCounter = 0;
 
-// Animação
+// #############################################################################
+// # SEÇÃO 9: LOOP DE ANIMAÇÃO E EVENTOS
+// #############################################################################
+
+// -----------------------------------------------------------------------------
+// Variáveis de Rastreamento
+// -----------------------------------------------------------------------------
+let lastCameraPosition = new THREE.Vector3();
+
+// -----------------------------------------------------------------------------
+// Loop de Animação Principal
+// -----------------------------------------------------------------------------
 function animate() {
     requestAnimationFrame(animate);
     
     const time = performance.now() * 0.001;
     
-    // Atualiza os controles
+    // Atualizar controles
     controls.update();
     
-    // Atualiza o show de luzes
+    // Atualizar show de luzes
     updateLightShow(time);
     
-    // Cria trilhas baseadas no movimento da câmera (simula pegadas)
+    // Sistema de trilhas (baseado no movimento da câmera)
     const cameraPos = camera.position.clone();
-    cameraPos.y = 0; // Projeta no chão
+    cameraPos.y = 0;
     
     if (lastCameraPosition.distanceTo(cameraPos) > 0.5) {
-        // Adiciona ponto de trilha a cada 0.5 unidades de movimento
         for (let i = 0; i < 4; i++) {
             const offset = new THREE.Vector3(
-                (i % 2 - 0.5) * 0.3, // Offset lateral
+                (i % 2 - 0.5) * 0.3,
                 0,
-                Math.floor(i / 2) * 0.2 // Offset frontal
+                Math.floor(i / 2) * 0.2
             );
-            const trackPos = cameraPos.clone().add(offset);
-            groundData.addTrackPoint(i, trackPos);
+            groundData.addTrackPoint(i, cameraPos.clone().add(offset));
         }
         lastCameraPosition.copy(cameraPos);
     }
     
-    // Atualiza o sistema de trilhas
+    // Atualizar sistemas
     groundData.update(renderer);
+    platformGrass.update(time, camera.position);
     
-    // Atualiza a grama da plataforma
-    if (platformGrass) {
-        platformGrass.update(time, camera.position);
-    }
-    
-    // Atualiza transição automática dia/noite
+    // Transição automática dia/noite
     if (dayNightConfig.autoTransition && !isTransitioning) {
         const newBlend = (Math.sin(time * dayNightConfig.autoTransitionSpeed) + 1) / 2;
-        if (Math.abs(newBlend - dayNightBlend) > 0.01) { // Só atualiza se mudou significativamente
+        if (Math.abs(newBlend - dayNightBlend) > 0.01) {
             dayNightBlend = newBlend;
             if (skybox.material && skybox.material.uniforms) {
                 skybox.material.uniforms.blend.value = dayNightBlend;
             } else {
-                // Se não tem uniforms, recria o material
                 updateSkybox();
             }
             updateEnvironmentForDayNight();
         }
     }
     
-    // Renderiza a cena
+    // Renderizar
     renderer.render(scene, camera);
 }
 
-// Ajusta o tamanho quando a janela é redimensionada
+// -----------------------------------------------------------------------------
+// Event Listeners
+// -----------------------------------------------------------------------------
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Inicia a animação
+// -----------------------------------------------------------------------------
+// Iniciar Animação
+// -----------------------------------------------------------------------------
 animate();
-
