@@ -130,7 +130,7 @@ exrLoader.load(
 
 // Terreno - Base (mantido para sombras e física)
 const terrainSize = 50;
-const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 64, 64);
+const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 128, 128); // Mais subdivisões para detalhe
 const terrainMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x4a7c59,
     roughness: 0.9,
@@ -141,6 +141,85 @@ const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
 terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
+
+// Função de ruído simples para variação de terreno
+function noise2D(x, z) {
+    const X = Math.floor(x) & 255;
+    const Z = Math.floor(z) & 255;
+    x -= Math.floor(x);
+    z -= Math.floor(z);
+    const u = x * x * (3.0 - 2.0 * x);
+    const v = z * z * (3.0 - 2.0 * z);
+    
+    // Hash function simples
+    const A = (X + Z * 57) * 0.01;
+    const B = ((X + 1) + Z * 57) * 0.01;
+    const C = (X + (Z + 1) * 57) * 0.01;
+    const D = ((X + 1) + (Z + 1) * 57) * 0.01;
+    
+    return (1.0 - v) * (1.0 - u) * Math.sin(A) +
+           (1.0 - v) * u * Math.sin(B) +
+           v * (1.0 - u) * Math.sin(C) +
+           v * u * Math.sin(D);
+}
+
+// Função de ruído fractal (múltiplas camadas)
+function fractalNoise(x, z, octaves = 4) {
+    let value = 0;
+    let amplitude = 1;
+    let frequency = 0.1;
+    let maxValue = 0;
+    
+    for (let i = 0; i < octaves; i++) {
+        value += noise2D(x * frequency, z * frequency) * amplitude;
+        maxValue += amplitude;
+        amplitude *= 0.5;
+        frequency *= 2;
+    }
+    
+    return value / maxValue;
+}
+
+// Adiciona variação de altura ao terreno
+const vertices = terrainGeometry.attributes.position;
+const flatZoneRadius = 8; // Raio da zona plana ao redor da igreja
+const maxHeight = 2.0; // Altura máxima do terreno
+
+for (let i = 0; i < vertices.count; i++) {
+    const x = vertices.getX(i);
+    const z = vertices.getZ(i);
+    
+    // Distância do centro (onde a igreja está)
+    const distanceFromCenter = Math.sqrt(x * x + z * z);
+    
+    // Função que reduz a variação próximo ao centro
+    // Retorna 0 no centro e 1 nas bordas
+    const heightFactor = Math.max(0, Math.min(1, (distanceFromCenter - flatZoneRadius) / (terrainSize / 2 - flatZoneRadius)));
+    
+    // Gera altura usando ruído fractal
+    const noiseValue = fractalNoise(x, z, 4);
+    const height = noiseValue * maxHeight * heightFactor;
+    
+    // Adiciona pequenas variações locais
+    const localVariation = (Math.random() - 0.5) * 0.2 * heightFactor;
+    
+    vertices.setY(i, height + localVariation);
+}
+
+terrainGeometry.computeVertexNormals();
+
+// Função para obter altura do terreno em uma posição (x, z)
+function getTerrainHeight(x, z) {
+    const distanceFromCenter = Math.sqrt(x * x + z * z);
+    const flatZoneRadius = 8;
+    const maxHeight = 2.0;
+    
+    const heightFactor = Math.max(0, Math.min(1, (distanceFromCenter - flatZoneRadius) / (terrainSize / 2 - flatZoneRadius)));
+    const noiseValue = fractalNoise(x, z, 4);
+    const height = noiseValue * maxHeight * heightFactor;
+    
+    return height;
+}
 
 // Sistema de Trilhas (GroundData)
 class GroundData {
@@ -238,7 +317,9 @@ class InfiniteGrass {
             // Gera em uma área maior para garantir cobertura
             const x = (Math.random() - 0.5) * totalSize;
             const z = (Math.random() - 0.5) * totalSize;
-            const center = new THREE.Vector3(x, 0, z);
+            // Calcula a altura do terreno nesta posição
+            const terrainHeight = getTerrainHeight(x, z);
+            const center = new THREE.Vector3(x, terrainHeight, z);
             this.centers.push(center);
             
             const height = 0.3 + Math.random() * 0.2;
@@ -435,10 +516,14 @@ class InfiniteGrass {
                 if (Math.abs(dx) > halfSize) {
                     const offset = Math.sign(dx) * tileSize;
                     center.x += offset;
+                    // Atualiza altura do terreno na nova posição
+                    center.y = getTerrainHeight(center.x, center.z);
                 }
                 if (Math.abs(dz) > halfSize) {
                     const offset = Math.sign(dz) * tileSize;
                     center.z += offset;
+                    // Atualiza altura do terreno na nova posição
+                    center.y = getTerrainHeight(center.x, center.z);
                 }
                 
                 // Atualiza atributos
