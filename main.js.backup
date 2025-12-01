@@ -90,9 +90,9 @@ spot1.castShadow = true;
 spot1.shadow.mapSize.width = 2048;
 spot1.shadow.mapSize.height = 2048;
 scene.add(spot1);
-lights.push({ 
-    name: 'Holofote 1 (Frontal Esq)', 
-    light: spot1, 
+lights.push({
+    name: 'Holofote 1 (Frontal Esq)',
+    light: spot1,
     color: 0xff0066,
     baseAngle: 0,
     colorIndex: 0
@@ -104,9 +104,9 @@ spot2.position.set(8, 10, 8);
 spot2.target = churchTarget;
 spot2.castShadow = true;
 scene.add(spot2);
-lights.push({ 
-    name: 'Holofote 2 (Frontal Dir)', 
-    light: spot2, 
+lights.push({
+    name: 'Holofote 2 (Frontal Dir)',
+    light: spot2,
     color: 0x00ff66,
     baseAngle: Math.PI / 2,
     colorIndex: 2
@@ -118,9 +118,9 @@ spot3.position.set(-8, 10, -8);
 spot3.target = churchTarget;
 spot3.castShadow = true;
 scene.add(spot3);
-lights.push({ 
-    name: 'Holofote 3 (Traseira Esq)', 
-    light: spot3, 
+lights.push({
+    name: 'Holofote 3 (Traseira Esq)',
+    light: spot3,
     color: 0x6600ff,
     baseAngle: Math.PI,
     colorIndex: 4
@@ -132,9 +132,9 @@ spot4.position.set(8, 10, -8);
 spot4.target = churchTarget;
 spot4.castShadow = true;
 scene.add(spot4);
-lights.push({ 
-    name: 'Holofote 4 (Traseira Dir)', 
-    light: spot4, 
+lights.push({
+    name: 'Holofote 4 (Traseira Dir)',
+    light: spot4,
     color: 0xff6600,
     baseAngle: Math.PI * 1.5,
     colorIndex: 6
@@ -146,9 +146,9 @@ spot5.position.set(0, 15, 0);
 spot5.target = churchTarget;
 spot5.castShadow = true;
 scene.add(spot5);
-lights.push({ 
-    name: 'Holofote 5 (Topo)', 
-    light: spot5, 
+lights.push({
+    name: 'Holofote 5 (Topo)',
+    light: spot5,
     color: 0xffffff,
     baseAngle: 0,
     colorIndex: 0,
@@ -161,9 +161,9 @@ spot6.position.set(-12, 8, 0);
 spot6.target = churchTarget;
 spot6.castShadow = true;
 scene.add(spot6);
-lights.push({ 
-    name: 'Holofote 6 (Lateral Esq)', 
-    light: spot6, 
+lights.push({
+    name: 'Holofote 6 (Lateral Esq)',
+    light: spot6,
     color: 0x00ffff,
     baseAngle: Math.PI * 0.75,
     colorIndex: 1
@@ -175,9 +175,9 @@ spot7.position.set(12, 8, 0);
 spot7.target = churchTarget;
 spot7.castShadow = true;
 scene.add(spot7);
-lights.push({ 
-    name: 'Holofote 7 (Lateral Dir)', 
-    light: spot7, 
+lights.push({
+    name: 'Holofote 7 (Lateral Dir)',
+    light: spot7,
     color: 0xffff00,
     baseAngle: Math.PI * 1.25,
     colorIndex: 3
@@ -194,42 +194,42 @@ lights.forEach((lightData, index) => {
 // Função para atualizar o show de luzes
 function updateLightShow(time) {
     if (!lightShowConfig.enabled) return;
-    
+
     const speed = lightShowConfig.speed;
     const colorSpeed = lightShowConfig.colorSpeed;
-    
+
     lights.forEach((lightData, index) => {
         const light = lightData.light;
-        
+
         // Animação de movimento (posição orbital)
         if (lightShowConfig.movementEnabled && !lightData.isTop) {
             const radius = 10;
             const height = 8 + Math.sin(time * speed + lightData.baseAngle) * 2;
             const angle = lightData.baseAngle + Math.sin(time * speed * 0.5) * 0.5;
-            
+
             // Movimento suave orbital
             light.position.x = Math.cos(angle + time * speed * 0.3) * radius;
             light.position.z = Math.sin(angle + time * speed * 0.3) * radius;
             light.position.y = height;
         }
-        
+
         // Animação de cor
         if (lightShowConfig.colorChangeEnabled) {
             const colorIndex = (lightData.colorIndex + Math.floor(time * colorSpeed)) % showColors.length;
             const nextColorIndex = (colorIndex + 1) % showColors.length;
             const t = (time * colorSpeed) % 1;
-            
+
             // Interpolação suave entre cores
             const currentColor = showColors[colorIndex];
             const nextColor = showColors[nextColorIndex];
             light.color.lerpColors(currentColor, nextColor, t);
         }
-        
+
         // Pulsação de intensidade
         const baseIntensity = lightData.isTop ? 30 : 50;
         light.intensity = baseIntensity + Math.sin(time * speed * 2 + index) * 15;
     });
-    
+
     // Atualiza helpers
     lightHelpers.forEach(helper => {
         if (helper.visible) helper.update();
@@ -266,18 +266,18 @@ scene.add(skybox);
 // Carrega o skybox do dia (EXR)
 const exrLoader = new EXRLoader();
 exrLoader.load(
-    '/assets/skyboxes/qwantani_sunset_puresky_1k.exr',
+    '/public/skyboxes/qwantani_sunset_puresky_1k.exr',
     (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping;
         texture.colorSpace = THREE.LinearSRGBColorSpace;
         texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
         dayTexture = texture;
-        
+
         // Se ainda não temos a textura da noite, usa a do dia
         if (!nightTexture) {
             updateSkybox();
         }
-        
+
         console.log('Skybox Dia carregado!');
     },
     undefined,
@@ -289,7 +289,7 @@ exrLoader.load(
 // Carrega o skybox da noite (Galáxia) - usa o loader existente
 const nightSkyboxLoader = new GLTFLoader();
 nightSkyboxLoader.load(
-    '/assets/inside_galaxy_skybox_hdri_360_panorama/scene.gltf',
+    '/public/inside_galaxy_skybox_hdri_360_panorama/scene.gltf',
     (gltf) => {
         // Extrai a textura do modelo
         gltf.scene.traverse((child) => {
@@ -300,7 +300,7 @@ nightSkyboxLoader.load(
                     texture.colorSpace = THREE.LinearSRGBColorSpace;
                     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
                     nightTexture = texture;
-                    
+
                     updateSkybox();
                     console.log('Skybox Noite carregado!');
                 }
@@ -321,7 +321,7 @@ nightSkyboxLoader.load(
         gradient.addColorStop(1, '#000000');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
+
         // Adiciona estrelas
         for (let i = 0; i < 500; i++) {
             const x = Math.random() * canvas.width;
@@ -332,7 +332,7 @@ nightSkyboxLoader.load(
             ctx.arc(x, y, size, 0, Math.PI * 2);
             ctx.fill();
         }
-        
+
         nightTexture = new THREE.CanvasTexture(canvas);
         nightTexture.mapping = THREE.EquirectangularReflectionMapping;
         nightTexture.colorSpace = THREE.LinearSRGBColorSpace;
@@ -343,7 +343,7 @@ nightSkyboxLoader.load(
 // Função para atualizar o skybox com blend entre dia e noite
 function updateSkybox() {
     if (!dayTexture && !nightTexture) return;
-    
+
     if (dayTexture && nightTexture) {
         // Usa shader customizado para blend entre as duas texturas
         const blendMaterial = new THREE.ShaderMaterial({
@@ -365,13 +365,13 @@ function updateSkybox() {
                 uniform sampler2D nightTexture;
                 uniform float blend;
                 varying vec3 vWorldPosition;
-                
+
                 vec3 equirectangularUV(vec3 dir) {
                     float u = atan(dir.z, dir.x) / (2.0 * 3.14159265359) + 0.5;
                     float v = acos(dir.y) / 3.14159265359;
                     return vec3(u, v, 0.0);
                 }
-                
+
                 void main() {
                     vec3 dir = normalize(vWorldPosition);
                     vec2 uv = equirectangularUV(dir).xy;
@@ -385,7 +385,7 @@ function updateSkybox() {
             fog: false
         });
         skybox.material = blendMaterial;
-        
+
         // Atualiza environment map (interpola entre os dois)
         if (dayNightBlend < 0.5) {
             scene.environment = dayTexture;
@@ -418,34 +418,34 @@ function updateSkybox() {
 // Função para transicionar entre dia e noite
 function transitionDayNight(targetMode, duration = null) {
     if (isTransitioning) return;
-    
+
     const targetBlend = targetMode === 'night' ? 1.0 : 0.0;
     const transitionDuration = duration || dayNightConfig.transitionTime;
     const startBlend = dayNightBlend;
     const startTime = performance.now() * 0.001;
-    
+
     isTransitioning = true;
-    
+
     function animateTransition() {
         const currentTime = performance.now() * 0.001;
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / transitionDuration, 1.0);
-        
+
         // Easing suave (ease in-out)
-        const eased = progress < 0.5 
-            ? 2 * progress * progress 
+        const eased = progress < 0.5
+            ? 2 * progress * progress
             : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-        
+
         dayNightBlend = startBlend + (targetBlend - startBlend) * eased;
-        
+
         // Atualiza o skybox
         if (skybox.material.uniforms) {
             skybox.material.uniforms.blend.value = dayNightBlend;
         }
-        
+
         // Atualiza fog e ambiente
         updateEnvironmentForDayNight();
-        
+
         if (progress < 1.0) {
             requestAnimationFrame(animateTransition);
         } else {
@@ -453,7 +453,7 @@ function transitionDayNight(targetMode, duration = null) {
             dayNightConfig.mode = targetMode;
         }
     }
-    
+
     animateTransition();
 }
 
@@ -466,18 +466,18 @@ function updateEnvironmentForDayNight() {
         scene.fog.color.lerpColors(dayFogColor, nightFogColor, dayNightBlend);
         scene.fog.density = 0.015 + dayNightBlend * 0.01; // Mais denso à noite
     }
-    
+
     // Atualiza luz ambiente
     const dayAmbient = 0.1;
     const nightAmbient = 0.05;
     ambientLight.intensity = dayAmbient + (nightAmbient - dayAmbient) * dayNightBlend;
-    
+
     // Atualiza luz de hemisfério
     const daySkyColor = new THREE.Color(0x87ceeb);
     const nightSkyColor = new THREE.Color(0x000033);
     const dayGroundColor = new THREE.Color(0x4a7c59);
     const nightGroundColor = new THREE.Color(0x001122);
-    
+
     hemisphereLight.color.lerpColors(daySkyColor, nightSkyColor, dayNightBlend);
     hemisphereLight.groundColor.lerpColors(dayGroundColor, nightGroundColor, dayNightBlend);
     hemisphereLight.intensity = 0.3 - dayNightBlend * 0.2; // Menos intenso à noite
@@ -486,7 +486,7 @@ function updateEnvironmentForDayNight() {
 // Terreno - Base (mantido para sombras e física)
 const terrainSize = 50;
 const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 128, 128); // Mais subdivisões para detalhe
-const terrainMaterial = new THREE.MeshStandardMaterial({ 
+const terrainMaterial = new THREE.MeshStandardMaterial({
     color: 0x4a7c59,
     roughness: 0.9,
     metalness: 0.1,
@@ -505,13 +505,13 @@ function noise2D(x, z) {
     z -= Math.floor(z);
     const u = x * x * (3.0 - 2.0 * x);
     const v = z * z * (3.0 - 2.0 * z);
-    
+
     // Hash function simples
     const A = (X + Z * 57) * 0.01;
     const B = ((X + 1) + Z * 57) * 0.01;
     const C = (X + (Z + 1) * 57) * 0.01;
     const D = ((X + 1) + (Z + 1) * 57) * 0.01;
-    
+
     return (1.0 - v) * (1.0 - u) * Math.sin(A) +
            (1.0 - v) * u * Math.sin(B) +
            v * (1.0 - u) * Math.sin(C) +
@@ -524,14 +524,14 @@ function fractalNoise(x, z, octaves = 4) {
     let amplitude = 1;
     let frequency = 0.1;
     let maxValue = 0;
-    
+
     for (let i = 0; i < octaves; i++) {
         value += noise2D(x * frequency, z * frequency) * amplitude;
         maxValue += amplitude;
         amplitude *= 0.5;
         frequency *= 2;
     }
-    
+
     return value / maxValue;
 }
 
@@ -543,21 +543,21 @@ const maxHeight = 2.0; // Altura máxima do terreno
 for (let i = 0; i < vertices.count; i++) {
     const x = vertices.getX(i);
     const z = vertices.getZ(i);
-    
+
     // Distância do centro (onde a igreja está)
     const distanceFromCenter = Math.sqrt(x * x + z * z);
-    
+
     // Função que reduz a variação próximo ao centro
     // Retorna 0 no centro e 1 nas bordas
     const heightFactor = Math.max(0, Math.min(1, (distanceFromCenter - flatZoneRadius) / (terrainSize / 2 - flatZoneRadius)));
-    
+
     // Gera altura usando ruído fractal
     const noiseValue = fractalNoise(x, z, 4);
     const height = noiseValue * maxHeight * heightFactor;
-    
+
     // Adiciona pequenas variações locais
     const localVariation = (Math.random() - 0.5) * 0.2 * heightFactor;
-    
+
     vertices.setY(i, height + localVariation);
 }
 
@@ -568,11 +568,11 @@ function getTerrainHeight(x, z) {
     const distanceFromCenter = Math.sqrt(x * x + z * z);
     const flatZoneRadius = 8;
     const maxHeight = 2.0;
-    
+
     const heightFactor = Math.max(0, Math.min(1, (distanceFromCenter - flatZoneRadius) / (terrainSize / 2 - flatZoneRadius)));
     const noiseValue = fractalNoise(x, z, 4);
     const height = noiseValue * maxHeight * heightFactor;
-    
+
     return height;
 }
 
@@ -582,7 +582,7 @@ class GroundData {
         this.size = size;
         this.trackCount = 4; // 4 trilhas (como 4 rodas, adaptado para pegadas)
         this.trackLength = 128;
-        
+
         // DataTexture para cada trilha (128x1, RGBA)
         this.trackTextures = [];
         for (let i = 0; i < this.trackCount; i++) {
@@ -591,26 +591,26 @@ class GroundData {
             texture.needsUpdate = true;
             this.trackTextures.push(texture);
         }
-        
+
         // RenderTarget para o mapa de trilhas (aumenta resolução para área maior)
         this.renderTarget = new THREE.WebGLRenderTarget(1024, 1024, {
             format: THREE.RGBAFormat,
             type: THREE.FloatType
         });
-        
+
         // Cena separada para renderizar trilhas
         this.trackScene = new THREE.Scene();
         this.trackCamera = new THREE.OrthographicCamera(-size/2, size/2, size/2, -size/2, 0.1, 100);
         this.trackCamera.position.set(0, 10, 0);
         this.trackCamera.lookAt(0, 0, 0);
     }
-    
+
     addTrackPoint(trackIndex, position) {
         if (trackIndex >= this.trackCount) return;
-        
+
         const texture = this.trackTextures[trackIndex];
         const data = texture.image.data;
-        
+
         // Move todos os pontos uma posição à direita
         for (let i = (this.trackLength - 1) * 4; i >= 4; i -= 4) {
             data[i] = data[i - 4];     // R = X
@@ -618,23 +618,23 @@ class GroundData {
             data[i + 2] = data[i - 2]; // Z
             data[i + 3] = data[i - 1]; // A
         }
-        
+
         // Adiciona novo ponto no início
         data[0] = position.x;
         data[1] = position.y;
         data[2] = position.z;
         data[3] = 1.0; // Alpha = 1 quando toca o solo
-        
+
         texture.needsUpdate = true;
     }
-    
+
     update(renderer) {
         // Renderiza as trilhas no RenderTarget
         renderer.setRenderTarget(this.renderTarget);
         renderer.render(this.trackScene, this.trackCamera);
         renderer.setRenderTarget(null);
     }
-    
+
     getTrackTexture() {
         return this.renderTarget.texture;
     }
@@ -652,10 +652,10 @@ class InfiniteGrass {
         this.grassMaterial = null;
         this.grassMesh = null;
         this.centers = [];
-        
+
         this.init();
     }
-    
+
     init() {
         const positions = [];
         const centers = [];
@@ -663,11 +663,11 @@ class InfiniteGrass {
         const heights = [];
         const widths = [];
         const indices = [];
-        
+
         // Gera blades de grama em uma área maior com margem de segurança
         const margin = this.size * 0.2; // 20% de margem extra
         const totalSize = this.size + margin * 2;
-        
+
         for (let i = 0; i < this.count; i++) {
             // Gera em uma área maior para garantir cobertura
             const x = (Math.random() - 0.5) * totalSize;
@@ -676,40 +676,40 @@ class InfiniteGrass {
             const terrainHeight = getTerrainHeight(x, z);
             const center = new THREE.Vector3(x, terrainHeight, z);
             this.centers.push(center);
-            
+
             const height = 0.3 + Math.random() * 0.2;
             const width = 0.02 + Math.random() * 0.01;
-            
+
             // Cada blade é um triângulo simples (3 vértices)
             const baseY = 0;
             const topY = height;
-            
+
             // Vértice 1: base esquerda
             positions.push(-width, baseY, 0);
             centers.push(x, 0, z);
             ids.push(i);
             heights.push(height);
             widths.push(width);
-            
+
             // Vértice 2: topo
             positions.push(0, topY, 0);
             centers.push(x, 0, z);
             ids.push(i);
             heights.push(height);
             widths.push(width);
-            
+
             // Vértice 3: base direita
             positions.push(width, baseY, 0);
             centers.push(x, 0, z);
             ids.push(i);
             heights.push(height);
             widths.push(width);
-            
+
             // Índices do triângulo
             const baseIndex = i * 3;
             indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
         }
-        
+
         // Cria geometria
         this.grassGeometry = new THREE.BufferGeometry();
         this.grassGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
@@ -718,11 +718,11 @@ class InfiniteGrass {
         this.grassGeometry.setAttribute('height', new THREE.Float32BufferAttribute(heights, 1));
         this.grassGeometry.setAttribute('width', new THREE.Float32BufferAttribute(widths, 1));
         this.grassGeometry.setIndex(indices);
-        
+
         // Carrega shaders inline (mais confiável)
         this.loadDefaultShaders();
     }
-    
+
     loadDefaultShaders() {
         // Shaders inline como fallback
         const vertexShader = `
@@ -737,11 +737,11 @@ class InfiniteGrass {
             varying float vTipness;
             varying float vTrackInfluence;
             varying vec3 vNormal;
-            
+
             float random(vec2 st) {
                 return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
             }
-            
+
             float noise(vec2 st) {
                 vec2 i = floor(st);
                 vec2 f = fract(st);
@@ -752,7 +752,7 @@ class InfiniteGrass {
                 vec2 u = f * f * (3.0 - 2.0 * f);
                 return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
             }
-            
+
             vec3 getWind(vec2 pos, float time) {
                 float windStrength = 0.15;
                 float windFrequency1 = 0.5;
@@ -764,7 +764,7 @@ class InfiniteGrass {
                 float wind2 = noise(windPos2) * windStrength * 0.5;
                 return vec3(wind1 + wind2, 0.0, 0.0);
             }
-            
+
             void main() {
                 vTipness = float(gl_VertexID % 3) / 2.0;
                 vec3 localPos = position;
@@ -783,37 +783,37 @@ class InfiniteGrass {
                 float grassGreen = 0.3 + vTipness * 0.2;
                 grassGreen -= vTrackInfluence * 0.1;
                 vColor = vec3(0.1, grassGreen, 0.05);
-                
+
                 // Calcula normal para o fragment shader
                 vNormal = normalize(normalMatrix * up);
-                
+
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(worldPos, 1.0);
             }
         `;
-        
+
         const fragmentShader = `
             uniform sampler2D matcapTexture;
             varying vec3 vColor;
             varying float vTipness;
             varying float vTrackInfluence;
             varying vec3 vNormal;
-            
+
             void main() {
                 vec3 grassColor = vColor;
                 grassColor = mix(grassColor * 0.7, grassColor * 1.2, vTipness);
                 grassColor *= (1.0 - vTrackInfluence * 0.3);
-                
+
                 // Usa a normal passada do vertex shader
                 vec2 matcapUV = vNormal.xy * 0.5 + 0.5;
                 vec3 matcap = texture2D(matcapTexture, matcapUV).rgb;
                 vec3 finalColor = grassColor * (0.7 + matcap * 0.3);
-                
+
                 float alpha = 1.0;
                 alpha *= (1.0 - vTrackInfluence * 0.5);
                 gl_FragColor = vec4(finalColor, alpha);
             }
         `;
-        
+
         // Cria MatCap texture
         const matcapSize = 256;
         const matcapData = new Uint8Array(matcapSize * matcapSize * 4);
@@ -829,7 +829,7 @@ class InfiniteGrass {
         }
         const matcapTexture = new THREE.DataTexture(matcapData, matcapSize, matcapSize, THREE.RGBAFormat);
         matcapTexture.needsUpdate = true;
-        
+
         this.grassMaterial = new THREE.ShaderMaterial({
             vertexShader,
             fragmentShader,
@@ -845,28 +845,28 @@ class InfiniteGrass {
             transparent: true,
             alphaTest: 0.1
         });
-        
+
         this.grassMesh = new THREE.Mesh(this.grassGeometry, this.grassMaterial);
         this.grassMesh.frustumCulled = false;
         scene.add(this.grassMesh);
     }
-    
+
     update(time, cameraPos) {
         if (this.grassMaterial) {
             this.grassMaterial.uniforms.time.value = time;
             this.grassMaterial.uniforms.uCameraPosition.value.copy(cameraPos);
             this.grassMaterial.uniforms.trackTexture.value = groundData.getTrackTexture();
-            
+
             // Reposiciona blades que saíram dos limites (infinite tiling)
             // Usa uma área maior para garantir cobertura contínua
             const margin = this.size * 0.2;
             const halfSize = (this.size + margin * 2) / 2;
             const tileSize = this.size + margin * 2;
-            
+
             this.centers.forEach((center, i) => {
                 const dx = cameraPos.x - center.x;
                 const dz = cameraPos.z - center.z;
-                
+
                 // Reposiciona quando sai da área visível
                 if (Math.abs(dx) > halfSize) {
                     const offset = Math.sign(dx) * tileSize;
@@ -880,7 +880,7 @@ class InfiniteGrass {
                     // Atualiza altura do terreno na nova posição
                     center.y = getTerrainHeight(center.x, center.z);
                 }
-                
+
                 // Atualiza atributos
                 const baseIndex = i * 3;
                 for (let j = 0; j < 3; j++) {
@@ -929,7 +929,7 @@ for (let i = 0; i < 12; i++) {
     const angle = (i / 12) * Math.PI * 2;
     const radius = 8 + Math.random() * 4;
     const stoneSize = 0.3 + Math.random() * 0.2;
-    
+
     const stoneGeometry = new THREE.DodecahedronGeometry(stoneSize, 0);
     const stoneMaterial = new THREE.MeshStandardMaterial({
         color: new THREE.Color().setHSL(0.1, 0.2, 0.3 + Math.random() * 0.2),
@@ -937,7 +937,7 @@ for (let i = 0; i < 12; i++) {
         metalness: 0.1
     });
     const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
-    
+
     stone.position.set(
         Math.cos(angle) * radius,
         stoneSize * 0.5,
@@ -960,7 +960,7 @@ const treesGroup = new THREE.Group();
 // Função para criar uma árvore simples
 function createTree(x, z, scale = 1) {
     const tree = new THREE.Group();
-    
+
     // Tronco
     const trunkGeometry = new THREE.CylinderGeometry(0.2 * scale, 0.25 * scale, 1.5 * scale, 8);
     const trunkMaterial = new THREE.MeshStandardMaterial({
@@ -973,7 +973,7 @@ function createTree(x, z, scale = 1) {
     trunk.castShadow = true;
     trunk.receiveShadow = true;
     tree.add(trunk);
-    
+
     // Folhas (copa)
     const leavesGeometry = new THREE.ConeGeometry(1 * scale, 2 * scale, 8);
     const leavesMaterial = new THREE.MeshStandardMaterial({
@@ -986,7 +986,7 @@ function createTree(x, z, scale = 1) {
     leaves.castShadow = true;
     leaves.receiveShadow = true;
     tree.add(leaves);
-    
+
     tree.position.set(x, 0, z);
     return tree;
 }
@@ -1031,7 +1031,7 @@ function createDetailTexture(size = 512) {
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
-    
+
     // Base verde musgo
     const gradient = ctx.createLinearGradient(0, 0, size, size);
     gradient.addColorStop(0, 'rgba(50, 100, 30, 0)');
@@ -1040,14 +1040,14 @@ function createDetailTexture(size = 512) {
     gradient.addColorStop(1, 'rgba(30, 60, 20, 0)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
-    
+
     // Adiciona manchas de sujeira
     for (let i = 0; i < 50; i++) {
         const x = Math.random() * size;
         const y = Math.random() * size;
         const radius = 20 + Math.random() * 40;
         const alpha = 0.1 + Math.random() * 0.2;
-        
+
         const grd = ctx.createRadialGradient(x, y, 0, x, y, radius);
         grd.addColorStop(0, `rgba(30, 20, 10, ${alpha})`);
         grd.addColorStop(1, 'rgba(30, 20, 10, 0)');
@@ -1056,14 +1056,14 @@ function createDetailTexture(size = 512) {
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
     }
-    
+
     // Adiciona padrões de musgo (manchas verdes)
     for (let i = 0; i < 30; i++) {
         const x = Math.random() * size;
         const y = Math.random() * size;
         const radius = 15 + Math.random() * 25;
         const alpha = 0.15 + Math.random() * 0.25;
-        
+
         const grd = ctx.createRadialGradient(x, y, 0, x, y, radius);
         grd.addColorStop(0, `rgba(50, 100, 30, ${alpha})`);
         grd.addColorStop(0.5, `rgba(40, 80, 25, ${alpha * 0.5})`);
@@ -1073,13 +1073,13 @@ function createDetailTexture(size = 512) {
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
     }
-    
+
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(2, 2); // Repete a textura
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    
+
     return texture;
 }
 
@@ -1100,16 +1100,16 @@ const textureConfig = {
 // Carrega o modelo
 loadingElement.classList.add('show');
 loader.load(
-    '/assets/models/stylized_gothic_church/scene.gltf',
+    '/public/models/stylized_gothic_church/scene.gltf',
     (gltf) => {
         model = gltf.scene;
-        
+
         // Habilita sombras e ajusta materiais para responder à iluminação
         model.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
-                
+
                 // Garante que os materiais respondam à iluminação
                 if (child.material) {
                     // Função auxiliar para aplicar multi-textura e environment mapping
@@ -1131,18 +1131,18 @@ loader.load(
                                 roughness: oldMat.roughness !== undefined ? oldMat.roughness : 0.7,
                                 metalness: oldMat.metalness !== undefined ? oldMat.metalness : 0.1
                             });
-                            
+
                             // Multi-Textura: adiciona textura de detalhes
                             if (textureConfig.multiTextureEnabled) {
                                 newMat.aoMap = detailTexture; // Usa como AO map para detalhes
                             }
-                            
+
                             // Environment Mapping: usa o environment map da cena
                             if (scene.environment) {
                                 newMat.envMap = scene.environment;
                                 newMat.envMapIntensity = textureConfig.envMapIntensity;
                             }
-                            
+
                             return newMat;
                         } else {
                             // Já é MeshPhysicalMaterial, apenas adiciona as texturas
@@ -1156,7 +1156,7 @@ loader.load(
                             return mat;
                         }
                     };
-                    
+
                     // Se for um array de materiais
                     if (Array.isArray(child.material)) {
                         child.material = child.material.map((mat, index) => {
@@ -1200,7 +1200,7 @@ loader.load(
                             child.material = applyAdvancedTexturing(child.material);
                         }
                     }
-                    
+
                     // Aplica filtro anisotrópico em todas as texturas
                     const applyAnisotropy = (mat) => {
                         if (mat.map) mat.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -1209,7 +1209,7 @@ loader.load(
                         if (mat.metalnessMap) mat.metalnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
                         if (mat.aoMap) mat.aoMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
                     };
-                    
+
                     if (Array.isArray(child.material)) {
                         child.material.forEach(applyAnisotropy);
                     } else {
@@ -1218,42 +1218,42 @@ loader.load(
                 }
             }
         });
-        
+
         // Calcula o bounding box para centralizar o modelo
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
-        
+
         // Centraliza o modelo
         model.position.x = 0;
         model.position.y = 0;
         model.position.z = 0;
-        
+
         // Atualiza as variáveis de posição
         modelPosition.x = model.position.x;
         modelPosition.y = model.position.y;
         modelPosition.z = model.position.z;
-        
+
         // Ajusta a câmera para focar no modelo
         const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
         let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
         cameraZ *= 1.5; // Adiciona um pouco de espaço
-        
+
         camera.position.set(cameraZ, cameraZ * 0.5, cameraZ);
         camera.lookAt(0, 0, 0);
         controls.target.set(0, 0, 0);
         controls.update();
-        
+
         // Adiciona o modelo à cena
         scene.add(model);
-        
+
         // Esconde o loading
         loadingElement.classList.remove('show');
-        
+
         // Inicializa a GUI após o modelo carregar
         initGUI();
-        
+
         console.log('Modelo carregado com sucesso!');
     },
     (progress) => {
@@ -1309,7 +1309,7 @@ function initGUI() {
         });
     });
     lightsFolder.open();
-    
+
     // Controles individuais dos holofotes
     const spotsFolder = gui.addFolder('Holofotes Individuais');
     lights.forEach((lightData, index) => {
@@ -1320,7 +1320,7 @@ function initGUI() {
         lightFolder.add(lightData.light, 'distance', 10, 100, 5).name('Distância');
         lightFolder.add(lightData.light, 'visible').name('Visível');
     });
-    
+
     // Controles da Câmera
     const cameraFolder = gui.addFolder('Câmera');
     cameraFolder.add(guiConfig.camera, 'x', -50, 50, 0.5).name('Posição X').onChange((value) => {
@@ -1339,7 +1339,7 @@ function initGUI() {
         camera.fov = value;
         camera.updateProjectionMatrix();
     });
-    
+
     // Controles do Ambiente
     const ambienteFolder = gui.addFolder('Ambiente');
     ambienteFolder.add(guiConfig.ambiente, 'intensidade', 0, 2, 0.1).name('Luz Ambiente Intensidade').onChange((value) => {
@@ -1348,7 +1348,7 @@ function initGUI() {
     ambienteFolder.addColor(guiConfig.ambiente, 'cor').name('Luz Ambiente Cor').onChange((value) => {
         ambientLight.color.setHex(value);
     });
-    
+
     // Controles de Fog (Neblina)
     const fogConfig = {
         habilitado: true,
@@ -1373,7 +1373,7 @@ function initGUI() {
             scene.fog.density = value;
         }
     });
-    
+
     // Controles da Luz de Hemisfério
     const hemisphereFolder = gui.addFolder('Luz de Hemisfério');
     const hemisphereConfig = {
@@ -1391,11 +1391,11 @@ function initGUI() {
         hemisphereLight.groundColor.setHex(value);
     });
     hemisphereFolder.add(hemisphereLight, 'visible').name('Visível');
-    
+
     // Controles do Terreno
     const terrainFolder = gui.addFolder('Terreno');
     terrainFolder.add(terrain, 'visible').name('Mostrar Base (Física)');
-    
+
     // Controles da Grama Infinita
     const grassFolder = gui.addFolder('Grama Infinita');
     if (infiniteGrass && infiniteGrass.grassMesh) {
@@ -1406,7 +1406,7 @@ function initGUI() {
             grassFolder.add(infiniteGrass.grassMaterial.uniforms.windDirection.value, 'y', -2, 2, 0.1).name('Direção Vento Z');
         }
     }
-    
+
     // Controles de Trilhas
     const tracksFolder = gui.addFolder('Trilhas');
     tracksFolder.add({
@@ -1418,7 +1418,7 @@ function initGUI() {
             }
         }
     }, 'limparTrilhas').name('Limpar Trilhas');
-    
+
     // Controles do Caminho
     const pathFolder = gui.addFolder('Caminho');
     const pathColor = { cor: 0x6b6b6b };
@@ -1426,15 +1426,15 @@ function initGUI() {
         pathMaterial.color.setHex(value);
     });
     pathFolder.add(pathGroup, 'visible').name('Visível');
-    
+
     // Controles das Pedras Decorativas
     const stonesFolder = gui.addFolder('Pedras Decorativas');
     stonesFolder.add(decorativeStones, 'visible').name('Visível');
-    
+
     // Controles das Árvores
     const treesFolder = gui.addFolder('Árvores');
     treesFolder.add(treesGroup, 'visible').name('Visível');
-    
+
     // Controles de Multi-Textura e Environment Mapping
     const textureFolder = gui.addFolder('Texturas Avançadas');
     textureFolder.add(textureConfig, 'multiTextureEnabled').name('Multi-Textura (Detalhes)').onChange((value) => {
@@ -1468,14 +1468,14 @@ function initGUI() {
             });
         }
     });
-    
+
     // Controles da Cena
     const sceneFolder = gui.addFolder('Cena');
     const bgColor = { cor: 0x000000 };
     sceneFolder.addColor(bgColor, 'cor').name('Cor de Fundo').onChange((value) => {
         scene.background = new THREE.Color(value);
     });
-    
+
     // Controles de Dia/Noite
     const dayNightFolder = gui.addFolder('🌅 Modo Dia/Noite');
     dayNightFolder.add(dayNightConfig, 'mode', ['day', 'night']).name('Modo').onChange((value) => {
@@ -1491,12 +1491,12 @@ function initGUI() {
         irParaNoite: () => transitionDayNight('night')
     }, 'irParaNoite').name('➡️ Ir para Noite');
     dayNightFolder.open();
-    
+
     sceneFolder.add(skybox, 'visible').name('Mostrar Skybox');
-    
+
     sceneFolder.add(gridHelper, 'visible').name('Mostrar Grid');
     sceneFolder.add(axesHelper, 'visible').name('Mostrar Eixos');
-    
+
     // Função para resetar câmera
     sceneFolder.add({
         resetCamera: () => {
@@ -1538,19 +1538,19 @@ let trackCounter = 0;
 // Animação
 function animate() {
     requestAnimationFrame(animate);
-    
+
     const time = performance.now() * 0.001;
-    
+
     // Atualiza os controles
     controls.update();
-    
+
     // Atualiza o show de luzes
     updateLightShow(time);
-    
+
     // Cria trilhas baseadas no movimento da câmera (simula pegadas)
     const cameraPos = camera.position.clone();
     cameraPos.y = 0; // Projeta no chão
-    
+
     if (lastCameraPosition.distanceTo(cameraPos) > 0.5) {
         // Adiciona ponto de trilha a cada 0.5 unidades de movimento
         for (let i = 0; i < 4; i++) {
@@ -1564,15 +1564,15 @@ function animate() {
         }
         lastCameraPosition.copy(cameraPos);
     }
-    
+
     // Atualiza o sistema de trilhas
     groundData.update(renderer);
-    
+
     // Atualiza a grama infinita
     if (infiniteGrass) {
         infiniteGrass.update(time, camera.position);
     }
-    
+
     // Atualiza transição automática dia/noite
     if (dayNightConfig.autoTransition && !isTransitioning) {
         dayNightBlend = (Math.sin(time * dayNightConfig.autoTransitionSpeed) + 1) / 2;
@@ -1581,7 +1581,7 @@ function animate() {
         }
         updateEnvironmentForDayNight();
     }
-    
+
     // Renderiza a cena
     renderer.render(scene, camera);
 }
@@ -1595,4 +1595,3 @@ window.addEventListener('resize', () => {
 
 // Inicia a animação
 animate();
-
