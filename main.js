@@ -12,12 +12,12 @@ scene.fog = new THREE.FogExp2(0x87ceeb, 0.015); // Cor azul claro, densidade bai
 
 // Câmera
 const camera = new THREE.PerspectiveCamera(
-    75, // Campo de visão
+    50, // Campo de visão
     window.innerWidth / window.innerHeight, // Aspect ratio
     0.1, // Near plane
     1000 // Far plane
 );
-camera.position.set(5, 5, 5);
+camera.position.set(1, 1, 5);
 camera.lookAt(0, 0, 0);
 
 // Renderer
@@ -570,7 +570,7 @@ function updateEnvironmentForDayNight() {
 // ============================================
 
 // Terreno - Base (invisível, apenas para física)
-const terrainSize = 200;
+const terrainSize = 100; // Mesmo tamanho da plataforma
 const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 1, 1);
 const terrainMaterial = new THREE.MeshStandardMaterial({ 
     color: 0x4a7c59,
@@ -584,7 +584,7 @@ terrain.receiveShadow = true;
 scene.add(terrain);
 
 // Chão visível - plataforma plana
-const floorSize = 200;
+const floorSize = 100; // Tamanho da plataforma
 const floorGeometry = new THREE.PlaneGeometry(floorSize, floorSize, 1, 1);
 const floorMaterial = new THREE.MeshStandardMaterial({
     color: 0x3a6b4a, // Verde mais escuro que a grama
@@ -596,6 +596,60 @@ floor.rotation.x = -Math.PI / 2;
 floor.position.y = 0; // Plano no nível 0
 floor.receiveShadow = true;
 scene.add(floor);
+
+// ============================================
+// Borda da Plataforma
+// ============================================
+const borderGroup = new THREE.Group();
+const borderHeight = 0.5;
+const borderThickness = 0.3;
+const borderMaterial = new THREE.MeshStandardMaterial({
+    color: 0x5a4a3a, // Marrom/cinza para a borda
+    roughness: 0.8,
+    metalness: 0.2
+});
+
+// Borda Norte (Z positivo)
+const borderNorth = new THREE.Mesh(
+    new THREE.BoxGeometry(floorSize + borderThickness * 2, borderHeight, borderThickness),
+    borderMaterial
+);
+borderNorth.position.set(0, borderHeight / 2, floorSize / 2 + borderThickness / 2);
+borderNorth.castShadow = true;
+borderNorth.receiveShadow = true;
+borderGroup.add(borderNorth);
+
+// Borda Sul (Z negativo)
+const borderSouth = new THREE.Mesh(
+    new THREE.BoxGeometry(floorSize + borderThickness * 2, borderHeight, borderThickness),
+    borderMaterial
+);
+borderSouth.position.set(0, borderHeight / 2, -floorSize / 2 - borderThickness / 2);
+borderSouth.castShadow = true;
+borderSouth.receiveShadow = true;
+borderGroup.add(borderSouth);
+
+// Borda Leste (X positivo)
+const borderEast = new THREE.Mesh(
+    new THREE.BoxGeometry(borderThickness, borderHeight, floorSize),
+    borderMaterial
+);
+borderEast.position.set(floorSize / 2 + borderThickness / 2, borderHeight / 2, 0);
+borderEast.castShadow = true;
+borderEast.receiveShadow = true;
+borderGroup.add(borderEast);
+
+// Borda Oeste (X negativo)
+const borderWest = new THREE.Mesh(
+    new THREE.BoxGeometry(borderThickness, borderHeight, floorSize),
+    borderMaterial
+);
+borderWest.position.set(-floorSize / 2 - borderThickness / 2, borderHeight / 2, 0);
+borderWest.castShadow = true;
+borderWest.receiveShadow = true;
+borderGroup.add(borderWest);
+
+scene.add(borderGroup);
 
 // Função simplificada - sempre retorna 0 (terreno plano)
 function getTerrainHeight(x, z) {
@@ -668,11 +722,11 @@ class GroundData {
 
 const groundData = new GroundData(100);
 
-// Sistema de Grama Infinita
-class InfiniteGrass {
-    constructor(count = 50000, size = 50) {
+// Sistema de Grama Limitada à Plataforma
+class PlatformGrass {
+    constructor(count = 50000, platformSize = 100) {
         this.count = count;
-        this.size = size;
+        this.platformSize = platformSize;
         this.bladeSize = 0.3;
         this.grassGeometry = null;
         this.grassMaterial = null;
@@ -690,14 +744,14 @@ class InfiniteGrass {
         const widths = [];
         const indices = [];
         
-        // Gera blades de grama em uma área maior com margem de segurança
-        const margin = this.size * 0.2; // 20% de margem extra
-        const totalSize = this.size + margin * 2;
+        // Gera blades de grama apenas dentro da área da plataforma
+        const halfSize = this.platformSize / 2;
+        const margin = 2; // Margem pequena para evitar grama na borda
         
         for (let i = 0; i < this.count; i++) {
-            // Gera em uma área maior para garantir cobertura
-            const x = (Math.random() - 0.5) * totalSize;
-            const z = (Math.random() - 0.5) * totalSize;
+            // Gera apenas dentro da plataforma (com margem)
+            const x = (Math.random() - 0.5) * (this.platformSize - margin * 2);
+            const z = (Math.random() - 0.5) * (this.platformSize - margin * 2);
             // Terreno plano - altura sempre 0
             const center = new THREE.Vector3(x, 0, z);
             this.centers.push(center);
@@ -800,7 +854,7 @@ class InfiniteGrass {
                 vec3 up = cross(toCamera, right);
                 vec3 billboardPos = localPos.x * right + localPos.y * up;
                 vec3 worldPos = center + billboardPos;
-                vec2 trackUV = (worldPos.xz + 50.0) / 100.0;
+                vec2 trackUV = (worldPos.xz + 50.0) / 100.0; // Mantém compatibilidade com GroundData
                 vec4 trackData = texture2D(trackTexture, trackUV);
                 vTrackInfluence = trackData.a;
                 float trackBend = vTrackInfluence * 0.3;
@@ -881,42 +935,13 @@ class InfiniteGrass {
             this.grassMaterial.uniforms.time.value = time;
             this.grassMaterial.uniforms.uCameraPosition.value.copy(cameraPos);
             this.grassMaterial.uniforms.trackTexture.value = groundData.getTrackTexture();
-            
-            // Reposiciona blades que saíram dos limites (infinite tiling)
-            // Usa uma área maior para garantir cobertura contínua
-            const margin = this.size * 0.2;
-            const halfSize = (this.size + margin * 2) / 2;
-            const tileSize = this.size + margin * 2;
-            
-            this.centers.forEach((center, i) => {
-                const dx = cameraPos.x - center.x;
-                const dz = cameraPos.z - center.z;
-                
-                // Reposiciona quando sai da área visível
-                if (Math.abs(dx) > halfSize) {
-                    const offset = Math.sign(dx) * tileSize;
-                    center.x += offset;
-                    center.y = 0; // Terreno plano
-                }
-                if (Math.abs(dz) > halfSize) {
-                    const offset = Math.sign(dz) * tileSize;
-                    center.z += offset;
-                    center.y = 0; // Terreno plano
-                }
-                
-                // Atualiza atributos
-                const baseIndex = i * 3;
-                for (let j = 0; j < 3; j++) {
-                    this.grassGeometry.attributes.center.setXYZ(baseIndex + j, center.x, center.y, center.z);
-                }
-            });
-            this.grassGeometry.attributes.center.needsUpdate = true;
+            // Não precisa reposicionar - grama está fixa na plataforma
         }
     }
 }
 
-// Aumenta a área de grama para cobrir mais espaço e adiciona mais blades
-const infiniteGrass = new InfiniteGrass(100000, 100);
+// Grama limitada à plataforma
+const platformGrass = new PlatformGrass(50000, floorSize);
 
 // Caminho de pedras em frente à igreja
 const pathGroup = new THREE.Group();
@@ -1674,9 +1699,9 @@ function animate() {
     // Atualiza o sistema de trilhas
     groundData.update(renderer);
     
-    // Atualiza a grama infinita
-    if (infiniteGrass) {
-        infiniteGrass.update(time, camera.position);
+    // Atualiza a grama da plataforma
+    if (platformGrass) {
+        platformGrass.update(time, camera.position);
     }
     
     // Atualiza transição automática dia/noite
