@@ -69,7 +69,7 @@ exrLoader.load(
 // -----------------------------------------------------------------------------
 const nightSkyboxLoader = new GLTFLoader();
 nightSkyboxLoader.load(
-  "/inside_galaxy_skybox_hdri_360_panorama/scene.gltf",
+  "/skyboxes/inside_galaxy_skybox_hdri_360_panorama/scene.gltf",
   (gltf) => {
     console.log("[DIA/NOITE] Modelo GLTF da noite carregado");
     let textureFound = false;
