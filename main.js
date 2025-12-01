@@ -32,7 +32,7 @@ controls.minDistance = 2;
 controls.maxDistance = 50;
 
 // Iluminação
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
 scene.add(ambientLight);
 
 // Cria múltiplos pontos de luz
@@ -40,8 +40,8 @@ const lights = [];
 const lightHelpers = [];
 
 // Luz 1 - Principal
-const light1 = new THREE.PointLight(0xffffff, 1, 100);
-light1.position.set(5, 10, 5);
+const light1 = new THREE.PointLight(0xffffff, 1, 300);
+light1.position.set(-2.5, 2, 4.5);
 light1.castShadow = true;
 light1.shadow.mapSize.width = 2048;
 light1.shadow.mapSize.height = 2048;
@@ -49,18 +49,26 @@ scene.add(light1);
 lights.push({ name: 'Luz Principal', light: light1, color: 0xffffff });
 
 // Luz 2 - Lateral
-const light2 = new THREE.PointLight(0xffaa00, 0.8, 100);
-light2.position.set(-5, 8, 5);
+const light2 = new THREE.PointLight(0xffaa00, 0.8, 300);
+light2.position.set(2.5, 2, 4.5);
 light2.castShadow = true;
 scene.add(light2);
-lights.push({ name: 'Luz Lateral', light: light2, color: 0xffaa00 });
+lights.push({ name: 'Luz Lateral Direita', light: light2, color: 0xffaa00 });
 
 // Luz 3 - Traseira
-const light3 = new THREE.PointLight(0x00aaff, 0.6, 100);
-light3.position.set(0, 6, -5);
+const light3 = new THREE.PointLight(0x00aaff, 0.6, 300);
+light3.position.set(4.5, 2, -2.5);
 light3.castShadow = true;
 scene.add(light3);
 lights.push({ name: 'Luz Traseira', light: light3, color: 0x00aaff });
+
+// Luz 4 - Lateral
+const light4 = new THREE.PointLight(0x00aaff, 0.6, 300);
+light4.position.set(-4.5, 2, -2.5);
+light4.castShadow = true;
+scene.add(light4);
+lights.push({ name: 'Luz Lateral Esquerda', light: light4, color: 0x00aaff });
+
 
 // Helpers visuais para as luzes (esferas que mostram a posição)
 lights.forEach((lightData, index) => {
@@ -72,7 +80,7 @@ lights.forEach((lightData, index) => {
 // Chão
 const floorGeometry = new THREE.PlaneGeometry(20, 20);
 const floorMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0x90ee90,
+    color: 0x000000,
     roughness: 0.8,
     metalness: 0.2
 });
@@ -100,23 +108,75 @@ loader.load(
     (gltf) => {
         model = gltf.scene;
         
-        // Habilita sombras no modelo
+        // Habilita sombras e ajusta materiais para responder à iluminação
         model.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
+                
+                // Garante que os materiais respondam à iluminação
+                if (child.material) {
+                    // Se for um array de materiais
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach((mat, index) => {
+                            // Converte MeshBasicMaterial para MeshStandardMaterial
+                            if (mat.type === 'MeshBasicMaterial') {
+                                const newMaterial = new THREE.MeshStandardMaterial({
+                                    color: mat.color,
+                                    map: mat.map,
+                                    normalMap: mat.normalMap,
+                                    roughnessMap: mat.roughnessMap,
+                                    metalnessMap: mat.metalnessMap,
+                                    aoMap: mat.aoMap,
+                                    emissiveMap: mat.emissiveMap,
+                                    transparent: mat.transparent,
+                                    opacity: mat.opacity,
+                                    side: mat.side
+                                });
+                                child.material[index] = newMaterial;
+                            } else {
+                                // Garante que materiais existentes respondam à luz
+                                if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                                    mat.needsUpdate = true;
+                                }
+                            }
+                        });
+                    } else {
+                        // Material único
+                        if (child.material.type === 'MeshBasicMaterial') {
+                            const oldMat = child.material;
+                            const newMaterial = new THREE.MeshStandardMaterial({
+                                color: oldMat.color,
+                                map: oldMat.map,
+                                normalMap: oldMat.normalMap,
+                                roughnessMap: oldMat.roughnessMap,
+                                metalnessMap: oldMat.metalnessMap,
+                                aoMap: oldMat.aoMap,
+                                emissiveMap: oldMat.emissiveMap,
+                                transparent: oldMat.transparent,
+                                opacity: oldMat.opacity,
+                                side: oldMat.side
+                            });
+                            child.material = newMaterial;
+                        } else {
+                            // Garante que materiais existentes respondam à luz
+                            if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
+                                child.material.needsUpdate = true;
+                            }
+                        }
+                    }
+                }
             }
         });
         
         // Calcula o bounding box para centralizar o modelo
         const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         
         // Centraliza o modelo
-        model.position.x = -center.x;
-        model.position.y = -center.y;
-        model.position.z = -center.z;
+        model.position.x = 0;
+        model.position.y = 0;
+        model.position.z = 0;
         
         // Atualiza as variáveis de posição
         modelPosition.x = model.position.x;
@@ -175,7 +235,7 @@ const guiConfig = {
     },
     // Ambiente
     ambiente: {
-        cor: '#ffffff',
+        cor: '#000000',
         intensidade: ambientLight.intensity
     }
 };
@@ -183,38 +243,6 @@ const guiConfig = {
 // Função para inicializar a GUI
 function initGUI() {
     const gui = new GUI({ title: 'Controles da Cena' });
-    
-    // Controles do Modelo
-    const modelFolder = gui.addFolder('Modelo');
-    modelFolder.add(modelPosition, 'x', -10, 10, 0.1).name('Posição X').onChange((value) => {
-        if (model) model.position.x = value;
-    });
-    modelFolder.add(modelPosition, 'y', -10, 10, 0.1).name('Posição Y').onChange((value) => {
-        if (model) model.position.y = value;
-    });
-    modelFolder.add(modelPosition, 'z', -10, 10, 0.1).name('Posição Z').onChange((value) => {
-        if (model) model.position.z = value;
-    });
-    modelFolder.add(modelRotation, 'x', -Math.PI, Math.PI, 0.01).name('Rotação X').onChange((value) => {
-        if (model) model.rotation.x = value;
-    });
-    modelFolder.add(modelRotation, 'y', -Math.PI, Math.PI, 0.01).name('Rotação Y').onChange((value) => {
-        if (model) model.rotation.y = value;
-    });
-    modelFolder.add(modelRotation, 'z', -Math.PI, Math.PI, 0.01).name('Rotação Z').onChange((value) => {
-        if (model) model.rotation.z = value;
-    });
-    modelFolder.add(modelScale, 'x', 0.1, 3, 0.1).name('Escala X').onChange((value) => {
-        if (model) model.scale.x = value;
-    });
-    modelFolder.add(modelScale, 'y', 0.1, 3, 0.1).name('Escala Y').onChange((value) => {
-        if (model) model.scale.y = value;
-    });
-    modelFolder.add(modelScale, 'z', 0.1, 3, 0.1).name('Escala Z').onChange((value) => {
-        if (model) model.scale.z = value;
-    });
-    modelFolder.open();
-    
     // Controles das Luzes
     const lightsFolder = gui.addFolder('Luzes');
     lightsFolder.add({
@@ -298,7 +326,7 @@ function initGUI() {
     
     // Controles da Cena
     const sceneFolder = gui.addFolder('Cena');
-    const bgColor = { cor: 0x87ceeb };
+    const bgColor = { cor: 0x000000 };
     sceneFolder.addColor(bgColor, 'cor').name('Cor de Fundo').onChange((value) => {
         scene.background = new THREE.Color(value);
     });
@@ -326,28 +354,14 @@ function initGUI() {
             }
         }
     }, 'resetCamera').name('Resetar Câmera');
-    
+
     // Função para resetar modelo
     sceneFolder.add({
         resetModel: () => {
             if (model) {
-                const box = new THREE.Box3().setFromObject(model);
-                const center = box.getCenter(new THREE.Vector3());
-                model.position.x = -center.x;
-                model.position.y = -center.y;
-                model.position.z = -center.z;
-                model.rotation.set(0, 0, 0);
-                model.scale.set(1, 1, 1);
-                modelPosition.x = model.position.x;
-                modelPosition.y = model.position.y;
-                modelPosition.z = model.position.z;
-                modelRotation.x = 0;
-                modelRotation.y = 0;
-                modelRotation.z = 0;
-                modelScale.x = 1;
-                modelScale.y = 1;
-                modelScale.z = 1;
-                modelFolder.updateDisplay();
+                model.position.x = 0;
+                model.position.y = 0;
+                model.position.z = 0;
             }
         }
     }, 'resetModel').name('Resetar Modelo');
