@@ -40,7 +40,7 @@ const lights = [];
 const lightHelpers = [];
 
 // Luz 1 - Principal
-const light1 = new THREE.PointLight(0xffffff, 1, 300);
+const light1 = new THREE.PointLight(0xffffff, 5, 300);
 light1.position.set(-2.5, 2, 4.5);
 light1.castShadow = true;
 light1.shadow.mapSize.width = 2048;
@@ -49,7 +49,7 @@ scene.add(light1);
 lights.push({ name: 'Luz Principal', light: light1, color: 0xffffff });
 
 // Luz 2 - Lateral
-const light2 = new THREE.PointLight(0xffaa00, 0.8, 300);
+const light2 = new THREE.PointLight(0xffaa00, 10, 300);
 light2.position.set(2.5, 2, 4.5);
 light2.castShadow = true;
 scene.add(light2);
@@ -77,17 +77,142 @@ lights.forEach((lightData, index) => {
     lightHelpers.push(helper);
 });
 
-// Chão
-const floorGeometry = new THREE.PlaneGeometry(20, 20);
-const floorMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0x000000,
-    roughness: 0.8,
-    metalness: 0.2
+// Terreno - Base de grama
+const terrainSize = 50;
+const terrainGeometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 32, 32);
+const terrainMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x4a7c59, // Verde grama escuro
+    roughness: 0.9,
+    metalness: 0.1
 });
-const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-floor.rotation.x = -Math.PI / 2;
-floor.receiveShadow = true;
-scene.add(floor);
+const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+terrain.rotation.x = -Math.PI / 2;
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+// Adiciona variação de altura ao terreno (opcional - terreno levemente ondulado)
+const vertices = terrainGeometry.attributes.position;
+for (let i = 0; i < vertices.count; i++) {
+    const x = vertices.getX(i);
+    const z = vertices.getZ(i);
+    // Adiciona pequenas variações de altura para dar naturalidade
+    const y = Math.random() * 0.1 - 0.05;
+    vertices.setY(i, y);
+}
+terrainGeometry.computeVertexNormals();
+
+// Caminho de pedras em frente à igreja
+const pathGroup = new THREE.Group();
+const pathMaterial = new THREE.MeshStandardMaterial({
+    color: 0x6b6b6b, // Cinza pedra
+    roughness: 0.8,
+    metalness: 0.1
+});
+
+// Cria várias pedras para o caminho
+for (let i = 0; i < 8; i++) {
+    const stoneSize = 0.8 + Math.random() * 0.4;
+    const stoneGeometry = new THREE.BoxGeometry(
+        stoneSize,
+        0.1,
+        stoneSize * (0.7 + Math.random() * 0.3)
+    );
+    const stone = new THREE.Mesh(stoneGeometry, pathMaterial);
+    stone.position.set(
+        (i - 3.5) * 1.2,
+        0.05,
+        -2 + Math.random() * 0.3
+    );
+    stone.rotation.y = Math.random() * Math.PI * 0.2;
+    stone.receiveShadow = true;
+    pathGroup.add(stone);
+}
+scene.add(pathGroup);
+
+// Pedras decorativas ao redor
+const decorativeStones = new THREE.Group();
+for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2;
+    const radius = 8 + Math.random() * 4;
+    const stoneSize = 0.3 + Math.random() * 0.2;
+    
+    const stoneGeometry = new THREE.DodecahedronGeometry(stoneSize, 0);
+    const stoneMaterial = new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(0.1, 0.2, 0.3 + Math.random() * 0.2),
+        roughness: 0.9,
+        metalness: 0.1
+    });
+    const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
+    
+    stone.position.set(
+        Math.cos(angle) * radius,
+        stoneSize * 0.5,
+        Math.sin(angle) * radius
+    );
+    stone.rotation.set(
+        Math.random() * Math.PI,
+        Math.random() * Math.PI,
+        Math.random() * Math.PI
+    );
+    stone.castShadow = true;
+    stone.receiveShadow = true;
+    decorativeStones.add(stone);
+}
+scene.add(decorativeStones);
+
+// Árvores simples ao redor da igreja
+const treesGroup = new THREE.Group();
+
+// Função para criar uma árvore simples
+function createTree(x, z, scale = 1) {
+    const tree = new THREE.Group();
+    
+    // Tronco
+    const trunkGeometry = new THREE.CylinderGeometry(0.2 * scale, 0.25 * scale, 1.5 * scale, 8);
+    const trunkMaterial = new THREE.MeshStandardMaterial({
+        color: 0x5d4037, // Marrom
+        roughness: 0.9,
+        metalness: 0.1
+    });
+    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+    trunk.position.y = 0.75 * scale;
+    trunk.castShadow = true;
+    trunk.receiveShadow = true;
+    tree.add(trunk);
+    
+    // Folhas (copa)
+    const leavesGeometry = new THREE.ConeGeometry(1 * scale, 2 * scale, 8);
+    const leavesMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2d5016, // Verde escuro
+        roughness: 0.8,
+        metalness: 0.1
+    });
+    const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+    leaves.position.y = 2 * scale;
+    leaves.castShadow = true;
+    leaves.receiveShadow = true;
+    tree.add(leaves);
+    
+    tree.position.set(x, 0, z);
+    return tree;
+}
+
+// Adiciona árvores em posições estratégicas
+const treePositions = [
+    { x: -12, z: -8, scale: 1.2 },
+    { x: 12, z: -8, scale: 1.0 },
+    { x: -10, z: 10, scale: 0.9 },
+    { x: 10, z: 10, scale: 1.1 },
+    { x: -15, z: 0, scale: 1.0 },
+    { x: 15, z: 0, scale: 0.8 }
+];
+
+treePositions.forEach(pos => {
+    const tree = createTree(pos.x, pos.z, pos.scale);
+    treesGroup.add(tree);
+});
+
+scene.add(treesGroup);
 
 // Variável para armazenar o modelo
 let model = null;
@@ -314,15 +439,31 @@ function initGUI() {
         ambientLight.color.setHex(value);
     });
     
-    // Controles do Chão
-    const floorFolder = gui.addFolder('Chão');
-    const floorColor = { cor: 0x90ee90 };
-    floorFolder.addColor(floorColor, 'cor').name('Cor').onChange((value) => {
-        floorMaterial.color.setHex(value);
+    // Controles do Terreno
+    const terrainFolder = gui.addFolder('Terreno');
+    const terrainColor = { cor: 0x4a7c59 };
+    terrainFolder.addColor(terrainColor, 'cor').name('Cor da Grama').onChange((value) => {
+        terrainMaterial.color.setHex(value);
     });
-    floorFolder.add(floorMaterial, 'roughness', 0, 1, 0.1).name('Rugosidade');
-    floorFolder.add(floorMaterial, 'metalness', 0, 1, 0.1).name('Metalicidade');
-    floorFolder.add(floor, 'visible').name('Visível');
+    terrainFolder.add(terrainMaterial, 'roughness', 0, 1, 0.1).name('Rugosidade');
+    terrainFolder.add(terrainMaterial, 'metalness', 0, 1, 0.1).name('Metalicidade');
+    terrainFolder.add(terrain, 'visible').name('Visível');
+    
+    // Controles do Caminho
+    const pathFolder = gui.addFolder('Caminho');
+    const pathColor = { cor: 0x6b6b6b };
+    pathFolder.addColor(pathColor, 'cor').name('Cor das Pedras').onChange((value) => {
+        pathMaterial.color.setHex(value);
+    });
+    pathFolder.add(pathGroup, 'visible').name('Visível');
+    
+    // Controles das Pedras Decorativas
+    const stonesFolder = gui.addFolder('Pedras Decorativas');
+    stonesFolder.add(decorativeStones, 'visible').name('Visível');
+    
+    // Controles das Árvores
+    const treesFolder = gui.addFolder('Árvores');
+    treesFolder.add(treesGroup, 'visible').name('Visível');
     
     // Controles da Cena
     const sceneFolder = gui.addFolder('Cena');
